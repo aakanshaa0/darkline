@@ -1,0 +1,15 @@
+{
+  "extends": "@react-native/typescript-config/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": [],
+    "lib": ["ES2021", "DOM"],
+    "experimentalDecorators": true,
+    "moduleSuffixes": [".native", ".web", ""],
+    "paths": {
+      "@app/*": ["app/*"],
+      "@shared/*": ["shared/*"]
+    }
+  },
+  "include": ["app", "shared", "web", "index.js"]
+}

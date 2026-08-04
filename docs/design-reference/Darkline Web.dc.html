@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>body{margin:0}</style>
+<script src="./browser-window.jsx"></script>
+</helmet>
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:oklch(94% 0.002 60);padding:40px;box-sizing:border-box;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
+<x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" width="{{ 1280 }}" height="{{ 800 }}" url="darkline.app/chats" hint-size="1280,800">
+
+<div style="height:100%;display:flex;background:{{ bgColor }};color:{{ textPrimary }}">
+
+<div style="width:76px;flex:none;background:{{ tabBarBg }};display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:22px;border-right:1px solid {{ borderColor }}">
+<svg width="26" height="26" viewBox="0 0 40 40">
+<line x1="12" y1="29" x2="29" y2="11" stroke="{{ accent }}" stroke-width="2.5" stroke-linecap="round"></line>
+<circle cx="8" cy="32" r="6" fill="{{ accent }}"></circle>
+<circle cx="32" cy="8" r="6" fill="none" stroke="{{ textPrimary }}" stroke-width="2.5"></circle>
+</svg>
+<div style="flex:1"></div>
+<div onClick="{{ goTabChats }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:{{ tabChatsColor }}"><div style="font-size:18px">💬</div><div style="font-size:10px">Chats</div></div>
+<div onClick="{{ goTabCalls }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:{{ tabCallsColor }}"><div style="font-size:18px">📞</div><div style="font-size:10px">Calls</div></div>
+<div onClick="{{ goTabNearby }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:{{ tabNearbyColor }}"><div style="font-size:18px">📡</div><div style="font-size:10px">Nearby</div></div>
+<div style="flex:1"></div>
+<div style="width:32px;height:32px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:12px">ME</div>
+</div>
+
+<div style="width:300px;flex:none;border-right:1px solid {{ borderColor }};display:flex;flex-direction:column;min-height:0">
+<div style="flex:none;padding:18px 18px 8px;font-size:22px;font-weight:700">{{ homeTitle }}</div>
+<div style="flex:1;overflow:auto">
+
+<sc-if value="{{ tabChats }}" hint-placeholder-val="{{ true }}">
+<div style="font-size:11px;letter-spacing:.04em;color:{{ textSecondary }};padding:10px 18px 4px">GROUPS</div>
+<sc-for list="{{ groups }}" as="g" hint-placeholder-count="1">
+<div onClick="{{ g.open }}" style="display:flex;align-items:center;gap:12px;padding:9px 18px;cursor:pointer;background:{{ g.rowBg }}">
+<div style="width:36px;height:36px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:12px">{{ g.initials }}</div>
+<div style="flex:1"><div style="font-size:14px">{{ g.name }}</div><div style="font-size:12px;color:{{ textSecondary }}">{{ g.count }} members</div></div>
+</div>
+</sc-for>
+<sc-for list="{{ contactsView }}" as="c" hint-placeholder-count="5">
+<sc-if value="{{ c.isSectionStart }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:11px;letter-spacing:.04em;color:{{ textSecondary }};padding:10px 18px 4px">{{ c.sectionLabel }}</div>
+</sc-if>
+<div onClick="{{ c.open }}" style="display:flex;align-items:center;gap:12px;padding:9px 18px;cursor:pointer;opacity:{{ c.rowOpacity }};background:{{ c.rowBg }}">
+<div style="width:36px;height:36px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:12px">{{ c.initials }}</div>
+<div style="flex:1"><div style="font-size:14px">{{ c.name }}</div><div style="font-size:12px;color:{{ textSecondary }}">{{ c.sub }}</div></div>
+<div style="width:8px;height:8px;border-radius:50%;background:{{ c.dotColor }};flex:none"></div>
+</div>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{ tabCalls }}" hint-placeholder-val="{{ false }}">
+<sc-for list="{{ callHistory }}" as="call" hint-placeholder-count="3">
+<div onClick="{{ call.callBack }}" style="display:flex;align-items:center;gap:12px;padding:10px 18px;cursor:pointer">
+<div style="width:36px;height:36px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:12px">{{ call.initials }}</div>
+<div style="flex:1">
+<div style="font-size:14px;color:{{ call.nameColor }}">{{ call.name }}</div>
+<div style="font-size:11px;color:{{ textSecondary }}">{{ call.kindLabel }} · {{ call.modeLabel }} · {{ call.time }}</div>
+</div>
+<div style="font-size:11px;color:{{ textSecondary }}">{{ call.duration }}</div>
+</div>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{ tabNearby }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:11px;letter-spacing:.04em;color:{{ textSecondary }};padding:10px 18px 4px">DISCOVERABLE NOW</div>
+<sc-for list="{{ nearbyContacts }}" as="n" hint-placeholder-count="2">
+<div onClick="{{ n.open }}" style="display:flex;align-items:center;gap:12px;padding:9px 18px;cursor:pointer">
+<div style="width:36px;height:36px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:12px">{{ n.initials }}</div>
+<div style="flex:1"><div style="font-size:14px">{{ n.name }}</div><div style="font-size:12px;color:{{ textSecondary }}">{{ n.modeLabel }}</div></div>
+<div style="width:8px;height:8px;border-radius:50%;background:{{ n.dotColor }};flex:none"></div>
+</div>
+</sc-for>
+<div style="font-size:11px;letter-spacing:.04em;color:{{ textSecondary }};padding:14px 18px 4px">NOT YET A CONTACT</div>
+<sc-for list="{{ unknownDevices }}" as="u" hint-placeholder-count="1">
+<div style="display:flex;align-items:center;gap:12px;padding:9px 18px">
+<div style="width:36px;height:36px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:11px;color:{{ textSecondary }}">?</div>
+<div style="flex:1"><div style="font-size:14px">{{ u.name }}</div><div style="font-size:12px;color:{{ textSecondary }}">{{ u.modeLabel }}</div></div>
+<div onClick="{{ u.add }}" style="font-size:12px;font-weight:600;color:{{ u.addLabelColor }};cursor:pointer">{{ u.addLabel }}</div>
+</div>
+</sc-for>
+</sc-if>
+
+</div>
+</div>
+
+<div style="flex:1;display:flex;flex-direction:column;min-height:0">
+
+<sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;display:flex;align-items:center;justify-content:center;color:{{ textSecondary }};font-size:14px">Select a conversation to start chatting</div>
+</sc-if>
+
+<sc-if value="{{ isThreadPanel }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid {{ borderColor }}">
+<div style="width:34px;height:34px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:12px">{{ activeContact.initials }}</div>
+<div style="flex:1"><div style="font-size:15px;font-weight:600">{{ activeContact.name }}</div><div style="font-size:11px;color:{{ textSecondary }}">{{ activeContact.presenceLabel }}</div></div>
+<sc-if value="{{ activeContact.canCall }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ startCallAudio }}" style="width:34px;height:34px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px">📞</div>
+<div onClick="{{ startCallVideo }}" style="width:34px;height:34px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;margin-left:8px">📹</div>
+</sc-if>
+</div>
+<sc-if value="{{ activeContact.callNote }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;padding:8px 20px;font-size:12px;color:{{ textSecondary }};background:{{ surfaceRaised }}">{{ activeContact.callNote }}</div>
+</sc-if>
+<div style="flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ activeMessages }}" as="m" hint-placeholder-count="4">
+<div style="max-width:52%;padding:9px 13px;border-radius:14px;font-size:14px;background:{{ m.bg }};color:{{ m.color }};align-self:{{ m.align }};border-bottom-left-radius:{{ m.blRadius }};border-bottom-right-radius:{{ m.brRadius }}">{{ m.text }}</div>
+</sc-for>
+</div>
+<div style="flex:none;display:flex;align-items:center;gap:10px;padding:14px 20px">
+<div style="flex:1;padding:10px 14px;border-radius:20px;background:{{ surfaceRaised }};font-size:14px;color:{{ textSecondary }}">Message…</div>
+<div onClick="{{ sendDemo }}" style="width:36px;height:36px;border-radius:50%;background:{{ accent }};color:{{ onAccentText }};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;flex:none">➤</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isGroupPanel }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid {{ borderColor }}">
+<div style="width:34px;height:34px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:12px">TR</div>
+<div style="flex:1"><div style="font-size:15px;font-weight:600">Trip Plan</div><div style="font-size:11px;color:{{ textSecondary }}">5 members</div></div>
+<div onClick="{{ startGroupCall }}" style="width:34px;height:34px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px">📹</div>
+</div>
+<div style="flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ groupMessages }}" as="gm" hint-placeholder-count="3">
+<div style="align-self:{{ gm.align }};max-width:52%">
+<sc-if value="{{ gm.senderName }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:11px;color:{{ textSecondary }};margin-bottom:2px;padding-left:4px">{{ gm.senderName }}</div>
+</sc-if>
+<div style="padding:9px 13px;border-radius:14px;font-size:14px;background:{{ gm.bg }};color:{{ gm.color }}">{{ gm.text }}</div>
+</div>
+</sc-for>
+</div>
+<div style="flex:none;display:flex;align-items:center;gap:10px;padding:14px 20px">
+<div style="flex:1;padding:10px 14px;border-radius:20px;background:{{ surfaceRaised }};font-size:14px;color:{{ textSecondary }}">Message…</div>
+<div onClick="{{ sendGroupDemo }}" style="width:36px;height:36px;border-radius:50%;background:{{ accent }};color:{{ onAccentText }};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;flex:none">➤</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isCallPanel }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;position:relative">
+<sc-if value="{{ isVideoCall }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:13px;color:{{ textSecondary }};letter-spacing:.05em">REMOTE VIDEO</div>
+<div style="position:absolute;top:70px;right:20px;width:120px;height:80px;border-radius:12px;background:{{ bgColor }};border:1px solid {{ borderColor }};display:flex;align-items:center;justify-content:center;font-size:11px;color:{{ textSecondary }}">you</div>
+</sc-if>
+<div style="position:relative;flex:none;padding:14px 20px;text-align:center;font-size:12px;font-weight:600;background:{{ callBannerBg }};color:{{ callBannerColor }}">{{ callBannerText }}</div>
+<sc-if value="{{ isVideoCall }}" hint-placeholder-val="{{ false }}"><div style="flex:1"></div></sc-if>
+<sc-if value="{{ isAudioCall }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px">
+<div style="width:100px;height:100px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;font-size:30px">{{ callContact.initials }}</div>
+<div style="font-size:19px;font-weight:600">{{ callContact.name }}</div>
+<div style="font-size:13px;color:{{ textSecondary }}">{{ callStatusText }}</div>
+</div>
+</sc-if>
+<div style="flex:none;display:flex;justify-content:center;gap:20px;padding:20px 0 28px;position:relative">
+<div onClick="{{ toggleMute }}" style="width:52px;height:52px;border-radius:50%;background:{{ muteBg }};color:{{ muteColor }};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px">{{ muteIcon }}</div>
+<sc-if value="{{ isAudioCall }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ toggleSpeaker }}" style="width:52px;height:52px;border-radius:50%;background:{{ speakerBg }};color:{{ speakerColor }};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px">🔊</div>
+</sc-if>
+<sc-if value="{{ isVideoCall }}" hint-placeholder-val="{{ false }}">
+<div style="width:52px;height:52px;border-radius:50%;background:{{ surfaceRaised }};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px">🔄</div>
+</sc-if>
+<div onClick="{{ endCall }}" style="width:52px;height:52px;border-radius:50%;background:#e5484d;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px">✕</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isGroupCallPanel }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column">
+<div style="flex:none;padding:14px 20px;text-align:center;font-size:12px;font-weight:600;background:{{ callBannerBg }};color:{{ callBannerColor }}">Group call · Trip Plan</div>
+<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:16px">
+<sc-for list="{{ groupCallTiles }}" as="t" hint-placeholder-count="4">
+<div style="background:{{ surfaceRaised }};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;border:{{ t.borderStr }}">{{ t.label }}</div>
+</sc-for>
+</div>
+<div style="flex:none;display:flex;justify-content:center;gap:20px;padding:20px 0 28px">
+<div onClick="{{ toggleMute }}" style="width:52px;height:52px;border-radius:50%;background:{{ muteBg }};color:{{ muteColor }};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px">{{ muteIcon }}</div>
+<div onClick="{{ endCall }}" style="width:52px;height:52px;border-radius:50%;background:#e5484d;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px">✕</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</x-import>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const PRESENCE_COLOR = { online: 'oklch(68% 0.16 35)', wifi: 'oklch(70% 0.09 240)', ble: 'oklch(70% 0.1 90)', offline: 'oklch(45% 0.005 60)' };
+const PRESENCE_LABEL = { online: 'Online', wifi: 'Nearby · WiFi', ble: 'Nearby · Bluetooth', offline: 'Offline' };
+const SECTION_LABEL = { online: 'ONLINE', wifi: 'NEARBY — WIFI', ble: 'NEARBY — BLUETOOTH', offline: 'OFFLINE' };
+
+class Component extends DCLogic {
+  state = {
+    tab: 'chats', rightView: null,
+    activeContactId: null, callContactId: null, callKind: 'audio', callPhase: 'ringing',
+    muted: false, speakerOn: false, addedNearby: {},
+    contacts: [
+      { id: 'jordan', name: 'Jordan M.', initials: 'JM', presence: 'online', sub: 'on my way!' },
+      { id: 'sara', name: 'Sara A.', initials: 'SA', presence: 'online', sub: 'sent a photo' },
+      { id: 'tariq', name: 'Tariq K.', initials: 'TK', presence: 'wifi', sub: 'chat + call' },
+      { id: 'priya', name: 'Priya L.', initials: 'PL', presence: 'ble', sub: 'text only, no signal' },
+      { id: 'dana', name: 'Dana W.', initials: 'DW', presence: 'offline', sub: 'last seen 2h ago' }
+    ],
+    messages: {
+      jordan: [{ fromMe: false, text: 'Hey, you around later?' }, { fromMe: true, text: 'Yeah, free after 6' }],
+      sara: [{ fromMe: false, text: 'Sent a photo from the trip' }, { fromMe: true, text: 'That view is incredible' }],
+      tariq: [{ fromMe: false, text: 'Are you nearby right now?' }, { fromMe: true, text: 'Yeah, connected via wifi direct' }],
+      priya: [{ fromMe: false, text: 'Are you nearby right now?' }, { fromMe: true, text: 'Yeah, relaying over bluetooth mesh' }],
+      dana: [{ fromMe: false, text: 'Running late, sorry!' }, { fromMe: true, text: "No worries — this'll sync once you're back online" }]
+    },
+    groupMessages: [
+      { fromMe: false, senderName: 'Sara', text: 'How about Saturday?' },
+      { fromMe: false, senderName: 'Jordan', text: 'Works for me' },
+      { fromMe: true, text: "I'm in too" }
+    ]
+  };
+
+  clearTimer() { if (this._t) clearTimeout(this._t); }
+  componentWillUnmount() { this.clearTimer(); }
+
+  setTab(tab) { this.setState({ tab }); }
+  openThread(id) { this.setState({ rightView: 'thread', activeContactId: id }); }
+  openGroup = () => this.setState({ rightView: 'group' });
+  sendDemo = () => {
+    const id = this.state.activeContactId;
+    const msgs = this.state.messages[id] || [];
+    this.setState({ messages: { ...this.state.messages, [id]: [...msgs, { fromMe: true, text: 'Got it 👍' }] } });
+  };
+  sendGroupDemo = () => this.setState({ groupMessages: [...this.state.groupMessages, { fromMe: true, text: 'Sounds good!' }] });
+  addNearby(id) { this.setState({ addedNearby: { ...this.state.addedNearby, [id]: true } }); }
+
+  startCall(contactId, kind) {
+    this.clearTimer();
+    this.setState({ rightView: 'call', callContactId: contactId, callKind: kind, callPhase: 'ringing', muted: false, speakerOn: false });
+    this._t = setTimeout(() => this.setState({ callPhase: 'active' }), 1200);
+  }
+  startGroupCall = () => this.setState({ rightView: 'groupcall' });
+  endCall = () => { this.clearTimer(); this.setState({ rightView: this.state.rightView === 'groupcall' ? 'group' : 'thread' }); };
+  toggleMute = () => this.setState({ muted: !this.state.muted });
+  toggleSpeaker = () => this.setState({ speakerOn: !this.state.speakerOn });
+
+  renderVals() {
+    const s = this.state;
+    const bgColor = 'oklch(18% 0.004 60)';
+    const surfaceRaised = 'oklch(27% 0.006 60)';
+    const tabBarBg = 'oklch(15% 0.004 60)';
+    const borderColor = 'oklch(30% 0.006 60)';
+    const textPrimary = 'oklch(95% 0.005 60)';
+    const textSecondary = 'oklch(60% 0.01 60)';
+    const accent = 'oklch(68% 0.16 35)';
+    const onAccentText = 'oklch(20% 0.02 35)';
+    const rowHighlight = 'oklch(24% 0.008 60)';
+
+    let lastSection = null;
+    const contactsView = s.contacts.map(c => {
+      const isSectionStart = c.presence !== lastSection;
+      lastSection = c.presence;
+      const canCall = c.presence === 'online' || c.presence === 'wifi';
+      const callNote = c.presence === 'ble' ? "Calls aren't available over Bluetooth mesh — text only."
+        : c.presence === 'offline' ? "This contact is offline. Messages sync once they reconnect." : null;
+      return {
+        ...c, isSectionStart, sectionLabel: SECTION_LABEL[c.presence],
+        dotColor: PRESENCE_COLOR[c.presence], presenceLabel: PRESENCE_LABEL[c.presence],
+        rowOpacity: c.presence === 'offline' ? 0.55 : 1,
+        rowBg: (s.rightView === 'thread' && s.activeContactId === c.id) ? rowHighlight : 'transparent',
+        canCall, callNote,
+        open: () => this.openThread(c.id)
+      };
+    });
+
+    const activeContact = contactsView.find(c => c.id === s.activeContactId) || {};
+    const activeMessages = (s.messages[s.activeContactId] || []).map(m => ({
+      text: m.text,
+      align: m.fromMe ? 'flex-end' : 'flex-start',
+      bg: m.fromMe ? accent : surfaceRaised,
+      color: m.fromMe ? onAccentText : textPrimary,
+      blRadius: m.fromMe ? '14px' : '4px',
+      brRadius: m.fromMe ? '4px' : '14px'
+    }));
+
+    const groupMessages = s.groupMessages.map(m => ({
+      text: m.text, senderName: m.senderName || null,
+      align: m.fromMe ? 'flex-end' : 'flex-start',
+      bg: m.fromMe ? accent : surfaceRaised,
+      color: m.fromMe ? onAccentText : textPrimary
+    }));
+
+    const callHistoryRaw = [
+      { id: 1, name: 'Jordan M.', initials: 'JM', kind: 'video', mode: 'internet', missed: false, duration: '12:04', time: 'Today, 2:14 PM', contactId: 'jordan' },
+      { id: 2, name: 'Tariq K.', initials: 'TK', kind: 'audio', mode: 'local', missed: false, duration: '3:40', time: 'Today, 11:02 AM', contactId: 'tariq' },
+      { id: 3, name: 'Priya L.', initials: 'PL', kind: 'audio', mode: 'ble', missed: true, duration: '—', time: 'Yesterday', contactId: 'priya' }
+    ];
+    const callHistory = callHistoryRaw.map(c => ({
+      ...c,
+      kindLabel: c.kind === 'video' ? 'Video' : 'Audio',
+      modeLabel: c.mode === 'internet' ? 'internet' : c.mode === 'local' ? 'local network' : 'bluetooth',
+      nameColor: c.missed ? 'oklch(68% 0.16 35)' : textPrimary,
+      callBack: () => this.startCall(c.contactId, c.kind)
+    }));
+
+    const nearbyContacts = contactsView.filter(c => c.presence === 'wifi' || c.presence === 'ble').map(c => ({
+      ...c, modeLabel: c.presence === 'wifi' ? 'WiFi direct · chat + call' : 'Bluetooth mesh · text only'
+    }));
+    const unknownDevicesRaw = [{ id: 'unknown1', name: 'Unknown device', mode: 'wifi' }];
+    const unknownDevices = unknownDevicesRaw.map(u => ({
+      ...u, modeLabel: u.mode === 'wifi' ? 'WiFi direct' : 'Bluetooth',
+      addLabel: s.addedNearby[u.id] ? 'Added' : 'Add',
+      addLabelColor: s.addedNearby[u.id] ? textSecondary : accent,
+      add: () => this.addNearby(u.id)
+    }));
+
+    const callContact = contactsView.find(c => c.id === s.callContactId) || {};
+    const isVideoCall = s.callKind === 'video' && s.rightView === 'call';
+    const isAudioCall = s.callKind === 'audio' && s.rightView === 'call';
+    let callBannerBg = 'oklch(24% 0.05 150)', callBannerColor = 'oklch(78% 0.12 150)', callBannerText = 'On the internet — good connection';
+    if (callContact.presence === 'wifi') { callBannerBg = 'oklch(24% 0.05 240)'; callBannerColor = 'oklch(78% 0.1 240)'; callBannerText = 'Switched to local network'; }
+    const callStatusText = s.callPhase === 'ringing' ? 'Calling…' : '00:14';
+
+    return {
+      bgColor, surfaceRaised, tabBarBg, borderColor, textPrimary, textSecondary, accent, onAccentText,
+      homeTitle: s.tab === 'chats' ? 'Chats' : s.tab === 'calls' ? 'Calls' : 'Nearby',
+      tabChats: s.tab === 'chats', tabCalls: s.tab === 'calls', tabNearby: s.tab === 'nearby',
+      tabChatsColor: s.tab === 'chats' ? accent : textSecondary,
+      tabCallsColor: s.tab === 'calls' ? accent : textSecondary,
+      tabNearbyColor: s.tab === 'nearby' ? accent : textSecondary,
+      goTabChats: () => this.setTab('chats'), goTabCalls: () => this.setTab('calls'), goTabNearby: () => this.setTab('nearby'),
+      openGroup: this.openGroup,
+      groups: [{ id: 'trip', name: 'Trip Plan', initials: 'TR', count: 5, open: this.openGroup, rowBg: s.rightView === 'group' ? rowHighlight : 'transparent' }],
+      contactsView, activeContact, activeMessages, groupMessages,
+      callHistory, nearbyContacts, unknownDevices,
+      isEmpty: !s.rightView, isThreadPanel: s.rightView === 'thread', isGroupPanel: s.rightView === 'group',
+      isCallPanel: s.rightView === 'call', isGroupCallPanel: s.rightView === 'groupcall',
+      startCallAudio: () => this.startCall(s.activeContactId, 'audio'),
+      startCallVideo: () => this.startCall(s.activeContactId, 'video'),
+      startGroupCall: this.startGroupCall,
+      sendDemo: this.sendDemo, sendGroupDemo: this.sendGroupDemo,
+      callContact, isVideoCall, isAudioCall, callBannerBg, callBannerColor, callBannerText, callStatusText,
+      muteIcon: s.muted ? '🔇' : '🎤', muteBg: s.muted ? accent : surfaceRaised, muteColor: s.muted ? onAccentText : textPrimary,
+      speakerBg: s.speakerOn ? accent : surfaceRaised, speakerColor: s.speakerOn ? onAccentText : textPrimary,
+      toggleMute: this.toggleMute, toggleSpeaker: this.toggleSpeaker, endCall: this.endCall,
+      groupCallTiles: [
+        { label: 'JM', borderStr: 'none' }, { label: 'SA', borderStr: 'none' },
+        { label: 'TK', borderStr: `2px solid ${accent}` }, { label: '+2', borderStr: 'none' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

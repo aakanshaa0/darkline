@@ -1,0 +1,49 @@
+{
+  "name": "darkline-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "start": "react-native start",
+    "web": "vite --config web/vite.config.ts",
+    "build:web": "vite build --config web/vite.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint app shared web --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-native": "0.75.2",
+    "react-native-web": "^0.19.13",
+    "zustand": "^4.5.5",
+    "socket.io-client": "^4.8.0",
+    "libsodium-wrappers": "^0.8.4",
+    "react-native-libsodium": "^1.7.0",
+    "react-native-ble-plx": "^3.5.1",
+    "react-native-wifi-p2p": "^3.6.1",
+    "react-native-webrtc": "^124.0.8",
+    "react-native-callkeep": "^4.3.16",
+    "react-native-keychain": "^10.0.0",
+    "@react-native-community/netinfo": "^12.0.1",
+    "@nozbe/watermelondb": "^0.28.0",
+    "buffer": "^6.0.3",
+    "react-native-tcp-socket": "^6.4.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@babel/plugin-proposal-decorators": "^7.24.7",
+    "@babel/plugin-transform-class-properties": "^7.25.4",
+    "@babel/preset-env": "^7.25.0",
+    "@babel/runtime": "^7.25.0",
+    "@react-native/babel-preset": "0.75.2",
+    "@react-native/metro-config": "0.75.2",
+    "@react-native/typescript-config": "0.75.2",
+    "@types/react": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
