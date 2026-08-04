@@ -12,7 +12,14 @@ import {
   type PublicProfile,
   type FetchedPrekeyBundleDto,
 } from "@shared/api";
-import { getSodium, loadOrCreateIdentity, encryptForRecipient, decryptFromSender, type Envelope } from "@shared/crypto";
+import {
+  getSodium,
+  loadOrCreateIdentity,
+  encryptForRecipient,
+  decryptFromSender,
+  isUndecryptable,
+  type Envelope,
+} from "@shared/crypto";
 import type { Presence } from "@shared/connectivity";
 
 export interface LiveContact {
@@ -43,12 +50,6 @@ export interface LiveConversation {
   lastMessageAt: string | null;
 }
 
-// Own sent-message plaintexts, session-only (see chatStore.ts header comment
-// on sendMessage for why this exists — it's a real, documented limitation,
-// not an oversight: a full fix needs the WatermelonDB persistence layer
-// (shared/db, already built) wired in here, which hasn't been done yet).
-const sentPlaintextCache = new Map<string, string>();
-
 function initialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -77,9 +78,12 @@ interface ChatState {
 
   conversations: LiveConversation[];
   messagesByConversation: Record<string, DecryptedMessage[]>;
+  /** False once a page comes back short — nothing older is left to fetch. */
+  hasMoreByConversation: Record<string, boolean>;
+  /** Guards against a scroll handler firing another fetch mid-flight. */
+  loadingOlderByConversation: Record<string, boolean>;
   activeConversationId: string | null;
 
-  prekeyCache: Record<string, FetchedPrekeyBundleDto>;
 
   setCurrentUserId: (userId: string | null) => void;
   loadInitialData: () => Promise<void>;
@@ -88,21 +92,29 @@ interface ChatState {
   openDirectConversation: (contactUserId: string) => Promise<void>;
   openGroupConversation: (conversationId: string) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
+  /** Fetches the page before the oldest message currently held. No-op when exhausted or already running. */
+  loadOlderMessages: (conversationId: string) => Promise<void>;
   registerSocketListeners: (socket: Socket) => void;
   reset: () => void;
 }
 
-async function decryptIncoming(ciphertext: string, myUserId: string, senderId: string): Promise<string> {
-  if (senderId === myUserId) {
-    return sentPlaintextCache.get(ciphertext) ?? "📤 Sent message (unavailable after reload)";
-  }
+/**
+ * Own messages take the same path as everyone else's now: encryptForRecipient
+ * writes a `selfCiphertext` sealed to our own prekey, so decryptFromSender can
+ * open our sent messages after a reload instead of relying on a session Map.
+ */
+async function decryptIncoming(ciphertext: string, _myUserId: string, _senderId: string): Promise<string> {
   try {
     const sodium = await getSodium();
     const envelope = JSON.parse(ciphertext) as Envelope;
     const { identity } = await loadOrCreateIdentity();
     return decryptFromSender(sodium, envelope, identity);
   } catch (err) {
-    console.error("[decryptIncoming] failed", err);
+    // Only surface genuine faults. A legacy envelope or one sealed to another
+    // device's key is expected and already shown by the lock placeholder —
+    // logging those spams LogBox on every thread open, and its overlay sits
+    // on top of the composer.
+    if (!isUndecryptable(err)) console.warn("[decryptIncoming] failed", err);
     return "🔒 Couldn't decrypt this message";
   }
 }
@@ -137,8 +149,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   searchLoading: false,
   conversations: [],
   messagesByConversation: {},
+  hasMoreByConversation: {},
+  loadingOlderByConversation: {},
   activeConversationId: null,
-  prekeyCache: {},
 
   setCurrentUserId: (userId) => set({ currentUserId: userId }),
 
@@ -235,6 +248,51 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((s) => ({ messagesByConversation: { ...s.messagesByConversation, [conversationId]: [] } }));
   },
 
+  loadOlderMessages: async (conversationId) => {
+    const state = get();
+    if (state.loadingOlderByConversation[conversationId]) return;
+    if (state.hasMoreByConversation[conversationId] === false) return;
+
+    const existing = state.messagesByConversation[conversationId] ?? [];
+    const oldest = existing[0];
+    if (!oldest) return;
+
+    const myUserId = state.currentUserId;
+    if (!myUserId) return;
+
+    set((s) => ({
+      loadingOlderByConversation: { ...s.loadingOlderByConversation, [conversationId]: true },
+    }));
+
+    try {
+      const { messages } = await conversationsApi.listMessages(conversationId, {
+        limit: MESSAGE_PAGE_SIZE,
+        before: oldest.createdAt,
+      });
+      const decrypted = await Promise.all(messages.map((m) => toDecryptedMessage(m, myUserId)));
+
+      set((s) => {
+        const current = s.messagesByConversation[conversationId] ?? [];
+        // Re-check by id: a socket delivery or a second fetch may have landed
+        // while this request was in flight.
+        const known = new Set(current.map((m) => m.id));
+        const fresh = decrypted.filter((m) => !known.has(m.id));
+        return {
+          messagesByConversation: { ...s.messagesByConversation, [conversationId]: [...fresh, ...current] },
+          hasMoreByConversation: {
+            ...s.hasMoreByConversation,
+            [conversationId]: messages.length === MESSAGE_PAGE_SIZE,
+          },
+          loadingOlderByConversation: { ...s.loadingOlderByConversation, [conversationId]: false },
+        };
+      });
+    } catch {
+      set((s) => ({
+        loadingOlderByConversation: { ...s.loadingOlderByConversation, [conversationId]: false },
+      }));
+    }
+  },
+
   sendMessage: async (text) => {
     const { activeConversationId, conversations, currentUserId } = get();
     if (!activeConversationId || !currentUserId) return;
@@ -254,19 +312,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     appendMessage(set, activeConversationId, optimistic);
 
     try {
-      const bundle = await getOrFetchPrekeyBundle(get, set, conversation.otherUserId);
+      const bundle = await fetchPrekeyBundles(conversation.otherUserId);
       const sodium = await getSodium();
       const { identity } = await loadOrCreateIdentity();
       const envelope = encryptForRecipient(sodium, text, bundle, identity);
       const ciphertext = JSON.stringify(envelope);
-      sentPlaintextCache.set(ciphertext, text);
 
       const { message } = await conversationsApi.sendMessage(activeConversationId, {
         localId,
         ciphertext,
         transportMode: "internet",
       });
-      sentPlaintextCache.set(message.ciphertext, text);
 
       set((s) => ({
         messagesByConversation: {
@@ -277,7 +333,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         },
       }));
     } catch (err) {
-      console.error("[sendMessage] failed", err);
+      console.warn("[sendMessage] failed", err);
       set((s) => ({
         messagesByConversation: {
           ...s.messagesByConversation,
@@ -325,9 +381,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       searchResults: [],
       conversations: [],
       messagesByConversation: {},
+      hasMoreByConversation: {},
+      loadingOlderByConversation: {},
       activeConversationId: null,
-      prekeyCache: {},
-    }),
+        }),
 }));
 
 function appendMessage(
@@ -343,26 +400,39 @@ function appendMessage(
   }));
 }
 
+/**
+ * Opening a thread loads only the newest page; older messages arrive via
+ * loadOlderMessages when the user scrolls up. The server returns newest-first
+ * and reverses, so `messages` is already oldest→newest within the page.
+ */
+export const MESSAGE_PAGE_SIZE = 30;
+
 async function loadMessagesForConversation(
   conversationId: string,
   set: (fn: (s: ChatState) => Partial<ChatState>) => void,
   get: () => ChatState,
 ): Promise<void> {
-  const { messages } = await conversationsApi.listMessages(conversationId);
+  const { messages } = await conversationsApi.listMessages(conversationId, { limit: MESSAGE_PAGE_SIZE });
   const myUserId = get().currentUserId;
   if (!myUserId) return;
   const decrypted = await Promise.all(messages.map((m) => toDecryptedMessage(m, myUserId)));
-  set((s) => ({ messagesByConversation: { ...s.messagesByConversation, [conversationId]: decrypted } }));
+  set((s) => ({
+    messagesByConversation: { ...s.messagesByConversation, [conversationId]: decrypted },
+    // A full page means there may be more behind it; a short one means there isn't.
+    hasMoreByConversation: {
+      ...s.hasMoreByConversation,
+      [conversationId]: messages.length === MESSAGE_PAGE_SIZE,
+    },
+  }));
 }
 
-async function getOrFetchPrekeyBundle(
-  get: () => ChatState,
-  set: (fn: (s: ChatState) => Partial<ChatState>) => void,
-  userId: string,
-): Promise<FetchedPrekeyBundleDto> {
-  const cached = get().prekeyCache[userId];
-  if (cached) return cached;
-  const bundle = await prekeysApi.getPrekeyBundle(userId);
-  set((s) => ({ prekeyCache: { ...s.prekeyCache, [userId]: bundle } }));
-  return bundle;
+/**
+ * Every registered device of `userId`, so the sender can seal one copy each.
+ * NOT cached: a recipient can register a new device at any time, and a stale
+ * list silently produces messages that device can never read.
+ */
+async function fetchPrekeyBundles(userId: string): Promise<FetchedPrekeyBundleDto[]> {
+  const res = await prekeysApi.getPrekeyBundle(userId);
+  // Older servers return a single bundle with no `bundles` array.
+  return res.bundles && res.bundles.length > 0 ? res.bundles : [res];
 }

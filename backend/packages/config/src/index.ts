@@ -34,6 +34,17 @@ const envSchema = z.object({
   TURN_URL: z.string().optional(),
   TURN_SECRET: z.string().optional(),
 
+  // Outbound SMS (phone OTP). Unset → lib/sms.ts logs the code instead of
+  // sending, which is what keeps the phone-auth flow usable in dev.
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM_NUMBER: z.string().optional(),
+
+  // Outbound email (verification codes, password reset). Same fallback.
+  SENDGRID_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().email().optional(),
+  APP_BASE_URL: z.string().url().default("http://localhost:5173"),
+
   AWS_REGION: z.string().optional(),
   AWS_S3_BUCKET: z.string().optional(),
   AWS_ACCESS_KEY_ID: z.string().optional(),

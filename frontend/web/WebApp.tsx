@@ -19,6 +19,8 @@ import {
   Composer,
   CallBanner,
   CallControls,
+  DateSeparator,
+  isNewDay,
 } from "../app/components";
 import {
   SplashScreen,
@@ -183,7 +185,22 @@ function ThreadPanel() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const loadOlderMessages = useChatStore((s) => s.loadOlderMessages);
+  const loadingOlder = useChatStore((s) =>
+    activeConversationId ? s.loadingOlderByConversation[activeConversationId] : false,
+  );
   const startCall = useAppStore((s) => s.startCall);
+
+  // Web keeps the browser's own scroll anchoring, so unlike the native
+  // ThreadScreen there's no manual offset restore needed after prepending.
+  const handleScroll = React.useCallback(
+    (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+      if (!activeConversationId || loadingOlder) return;
+      if (e.nativeEvent.contentOffset.y > 80) return;
+      void loadOlderMessages(activeConversationId);
+    },
+    [activeConversationId, loadingOlder, loadOlderMessages],
+  );
 
   const activeContact = getContactsView(contacts).find((c) => c.id === activeContactId);
   const activeMessages = (activeConversationId && messagesByConversation[activeConversationId]) || [];
@@ -200,9 +217,23 @@ function ThreadPanel() {
         onStartVideoCall={() => startCall(activeContact.id, "video")}
         callNote={activeContact.callNote}
       />
-      <ScrollView contentContainerStyle={styles.messages}>
-        {activeMessages.map((m) => (
-          <MessageBubble key={m.id} fromMe={m.fromMe} text={m.text} maxWidthPercent={52} />
+      <ScrollView
+        contentContainerStyle={styles.messages}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
+        {loadingOlder && <ActivityIndicator style={styles.olderSpinner} color={colors.textSecondary} />}
+        {activeMessages.map((m, i) => (
+          <React.Fragment key={m.id}>
+            {isNewDay(m.createdAt, activeMessages[i - 1]?.createdAt) && <DateSeparator iso={m.createdAt} />}
+            <MessageBubble
+              fromMe={m.fromMe}
+              text={m.text}
+              createdAt={m.createdAt}
+              pending={m.pending}
+              maxWidthPercent={52}
+            />
+          </React.Fragment>
         ))}
       </ScrollView>
       <Composer onSend={sendMessage} />
@@ -229,8 +260,18 @@ function GroupPanel() {
         onStartVideoCall={startGroupCall}
       />
       <ScrollView contentContainerStyle={styles.messages}>
-        {messages.map((m) => (
-          <MessageBubble key={m.id} fromMe={m.fromMe} text={m.text} senderName={m.senderName} maxWidthPercent={52} />
+        {messages.map((m, i) => (
+          <React.Fragment key={m.id}>
+            {isNewDay(m.createdAt, messages[i - 1]?.createdAt) && <DateSeparator iso={m.createdAt} />}
+            <MessageBubble
+              fromMe={m.fromMe}
+              text={m.text}
+              senderName={m.senderName}
+              createdAt={m.createdAt}
+              pending={m.pending}
+              maxWidthPercent={52}
+            />
+          </React.Fragment>
         ))}
       </ScrollView>
       <Composer onSend={() => undefined} />
@@ -411,6 +452,9 @@ const styles = StyleSheet.create({
   messages: {
     padding: 20,
     gap: 8,
+  },
+  olderSpinner: {
+    paddingBottom: 8,
   },
   remoteVideo: {
     position: "absolute",

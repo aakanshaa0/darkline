@@ -33,7 +33,17 @@ services:
   coturn:
     image: coturn/coturn:latest
     network_mode: host
-    command: ["-n", "--log-file=stdout", "--realm=darkline.local"]
+    # --use-auth-secret + --static-auth-secret is the REST-API (ephemeral
+    # credential) scheme the API signs TURN credentials with; without these
+    # coturn rejects every relay allocation. The secret must equal TURN_SECRET.
+    env_file: .env
+    command:
+      - "-n"
+      - "--log-file=stdout"
+      - "--realm=darkline.local"
+      - "--use-auth-secret"
+      - "--static-auth-secret=${TURN_SECRET}"
+      - "--fingerprint"
 
   api:
     build:

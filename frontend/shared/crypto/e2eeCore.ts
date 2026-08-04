@@ -48,9 +48,27 @@ export interface FetchedPrekeyBundle {
 }
 
 export interface Envelope {
-  ciphertext: string; // base64 — crypto_box_seal to the recipient's signed prekey
-  signature: string; // base64 — crypto_sign_detached over the raw ciphertext, proving who sent it
+  ciphertext: string; // base64 — crypto_box_seal to the recipient's FIRST device (kept for older readers)
+  /**
+   * One sealed copy per registered recipient device, `ciphertext` included.
+   * A sealed box can only be opened by the device holding the matching
+   * prekey, so a single copy meant only the recipient's most recently
+   * published device could read the message. Absent on older envelopes.
+   */
+  ciphertexts?: string[];
+  signature: string; // base64 — crypto_sign_detached over the ciphertext list, proving who sent it
   senderIdentityKey: string; // base64 ed25519 public key — the key `signature` is verified against
+  /**
+   * A second sealed box of the same plaintext, to the SENDER's own signed
+   * prekey. `ciphertext` is sealed to the recipient, so the sender genuinely
+   * cannot read back what it sent — without this, a sender's own messages are
+   * unrecoverable after a reload (they previously survived only in an
+   * in-memory Map, hence "Sent message (unavailable after reload)").
+   *
+   * Optional so envelopes written before this existed still parse; those
+   * older messages stay unreadable to the sender, which is unavoidable.
+   */
+  selfCiphertext?: string;
 }
 
 function toB64(sodium: SodiumLike, bytes: Uint8Array): string {
@@ -115,42 +133,110 @@ function verifiedSignedPreKeyPublic(sodium: SodiumLike, bundle: FetchedPrekeyBun
  * so no conversion is needed — and since a sealed box is anonymous, the
  * detached signature is what carries sender authenticity.
  */
+/** Signed material: the ciphertext list joined, so the signature covers every copy. */
+function signedPayload(sodium: SodiumLike, ciphertexts: string[]): Uint8Array {
+  return new TextEncoder().encode(ciphertexts.join("."));
+}
+
 export function encryptForRecipient(
   sodium: SodiumLike,
   plaintext: string,
-  recipientBundle: FetchedPrekeyBundle,
+  recipientBundles: FetchedPrekeyBundle | FetchedPrekeyBundle[],
   myIdentity: LocalIdentity,
 ): Envelope {
-  const recipientSignedPreKeyPublic = verifiedSignedPreKeyPublic(sodium, recipientBundle);
+  const bundles = Array.isArray(recipientBundles) ? recipientBundles : [recipientBundles];
+  if (bundles.length === 0) throw new Error("No recipient device bundles — cannot encrypt");
 
   const message = new TextEncoder().encode(plaintext);
-  const ciphertext = sodium.crypto_box_seal(message, recipientSignedPreKeyPublic);
-  const signature = sodium.crypto_sign_detached(ciphertext, myIdentity.identity.privateKey);
+
+  // One sealed copy per device. Each bundle's signed prekey is verified
+  // against that same bundle's identity key before it's used.
+  const ciphertexts = bundles.map((bundle) =>
+    toB64(sodium, sodium.crypto_box_seal(message, verifiedSignedPreKeyPublic(sodium, bundle))),
+  );
+
+  const signature = sodium.crypto_sign_detached(
+    signedPayload(sodium, ciphertexts),
+    myIdentity.identity.privateKey,
+  );
+  const selfCiphertext = sodium.crypto_box_seal(message, myIdentity.signedPreKey.keyPair.publicKey);
 
   return {
-    ciphertext: toB64(sodium, ciphertext),
+    ciphertext: ciphertexts[0],
+    ciphertexts,
     signature: toB64(sodium, signature),
     senderIdentityKey: toB64(sodium, myIdentity.identity.publicKey),
+    selfCiphertext: toB64(sodium, selfCiphertext),
   };
+}
+
+/**
+ * True when this envelope was written by the identity we hold — i.e. it is
+ * our own sent message coming back from the server, and `selfCiphertext` is
+ * the copy we can actually open.
+ */
+export function isOwnEnvelope(sodium: SodiumLike, envelope: Envelope, myIdentity: LocalIdentity): boolean {
+  return envelope.senderIdentityKey === toB64(sodium, myIdentity.identity.publicKey);
 }
 
 export function decryptFromSender(sodium: SodiumLike, envelope: Envelope, myIdentity: LocalIdentity): string {
   const senderIdentityPublic = fromB64(sodium, envelope.senderIdentityKey);
-  const ciphertext = fromB64(sodium, envelope.ciphertext);
+  const ciphertexts = envelope.ciphertexts ?? [envelope.ciphertext];
 
   // Verify before opening: a sealed box is anonymous, so an unverified
-  // envelope proves nothing about who wrote it.
-  const valid = sodium.crypto_sign_verify_detached(fromB64(sodium, envelope.signature), ciphertext, senderIdentityPublic);
+  // envelope proves nothing about who wrote it. Single-copy envelopes were
+  // signed over the raw bytes; multi-copy ones over the joined list.
+  const signature = fromB64(sodium, envelope.signature);
+  const valid = envelope.ciphertexts
+    ? sodium.crypto_sign_verify_detached(signature, signedPayload(sodium, ciphertexts), senderIdentityPublic)
+    : sodium.crypto_sign_verify_detached(signature, fromB64(sodium, envelope.ciphertext), senderIdentityPublic);
   if (!valid) {
     throw new Error("Message signature verification failed — refusing to decrypt an unauthenticated envelope");
   }
 
-  const plaintext = sodium.crypto_box_seal_open(
-    ciphertext,
-    myIdentity.signedPreKey.keyPair.publicKey,
-    myIdentity.signedPreKey.keyPair.privateKey,
-  );
-  return sodium.to_string(plaintext);
+  // Our own message: `ciphertext` is sealed to the recipient and is not ours
+  // to open, so read the self-copy instead.
+  const own = isOwnEnvelope(sodium, envelope, myIdentity);
+  if (own && !envelope.selfCiphertext) {
+    throw undecryptable("Own message predates self-copy support — plaintext is not recoverable");
+  }
+
+  // Sealed boxes carry no recipient hint, so there's nothing to match on —
+  // try each copy until one opens with our prekey.
+  const candidates = own ? [envelope.selfCiphertext!] : ciphertexts;
+  for (const candidate of candidates) {
+    try {
+      const plaintext = sodium.crypto_box_seal_open(
+        fromB64(sodium, candidate),
+        myIdentity.signedPreKey.keyPair.publicKey,
+        myIdentity.signedPreKey.keyPair.privateKey,
+      );
+      return sodium.to_string(plaintext);
+    } catch {
+      // Not addressed to this device — try the next copy.
+    }
+  }
+
+  // None matched: the sender didn't know about this device when it encrypted
+  // (registered later, or the sender used a cached bundle list).
+  throw undecryptable("No copy of this message was sealed to this device's key");
+}
+
+/**
+ * Marks a decryption failure as *expected* — a message this device was never
+ * able to read, rather than a bug. Callers use the flag to decide whether to
+ * make noise; the UI shows the same lock placeholder either way.
+ */
+export interface UndecryptableError extends Error {
+  expected: true;
+}
+
+export function isUndecryptable(err: unknown): err is UndecryptableError {
+  return typeof err === "object" && err !== null && (err as { expected?: unknown }).expected === true;
+}
+
+function undecryptable(message: string): UndecryptableError {
+  return Object.assign(new Error(message), { expected: true as const });
 }
 
 // ── Group chat: Sender Keys (Part B.6) ────────────────────────────────────

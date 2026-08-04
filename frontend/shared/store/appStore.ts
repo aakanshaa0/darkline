@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { Platform } from "react-native";
 import type { Presence } from "@shared/connectivity";
 import { authApi, prekeysApi, connectSocket, disconnectSocket, loadTokens, ApiError, type AuthResult } from "@shared/api";
-import { loadOrCreateIdentity } from "@shared/crypto";
+import { loadOrCreateIdentity, getSodium, toUploadableBundle } from "@shared/crypto";
+import { registerForPush } from "@shared/push";
 import { useChatStore } from "./chatStore";
 import { useCallStore } from "./callStore";
 
@@ -261,12 +262,21 @@ async function afterAuthenticated(userId: string): Promise<void> {
   useChatStore.getState().setCurrentUserId(userId);
 
   try {
-    const { freshBundle } = await loadOrCreateIdentity();
-    if (freshBundle) await prekeysApi.uploadPrekeys(freshBundle);
+    // Publish on every sign-in, not only when the identity is newly created:
+    // the upload is an upsert keyed by (userId, identityKey), and a device
+    // that only published once can never recover if the server loses its
+    // bundle — it would stay silently unreachable for all incoming messages.
+    const sodium = await getSodium();
+    const { identity } = await loadOrCreateIdentity();
+    await prekeysApi.uploadPrekeys(toUploadableBundle(sodium, identity));
   } catch {
     // Non-fatal — messaging will fail to encrypt to this user until keys exist,
     // but auth itself succeeded and shouldn't be blocked on this.
   }
+
+  // Fire-and-forget: a device with no push token still works fully, it just
+  // won't get notified while offline, so this must not delay the socket.
+  void registerForPush();
 
   try {
     const socket = await connectSocket();

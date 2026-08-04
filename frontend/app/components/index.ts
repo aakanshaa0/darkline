@@ -6,6 +6,7 @@ export * from "./EmptyText";
 export * from "./PillButton";
 export * from "./IconCircleButton";
 export * from "./MessageBubble";
+export * from "./DateSeparator";
 export * from "./ContactRow";
 export * from "./CallHistoryRow";
 export * from "./ThreadHeader";

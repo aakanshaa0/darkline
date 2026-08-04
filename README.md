@@ -24,15 +24,30 @@ Every message is end-to-end encrypted regardless of which of the three transport
 
 ## Screenshots
 
-Captured from the actual running web build (`npm run web`) — same React Native codebase that renders the iOS/Android apps. The six-panel set below uses sample data to show every screen at once; the two-panel set after it is from a real live test — two separate accounts, signed up and paired for real, exchanging a message that was actually encrypted and decrypted with real libsodium keys (see [Project status](#project-status)).
+### Android
+
+Captured from the debug build running on an Android emulator, signed in to two
+real accounts talking to each other through the live backend — the messages,
+timestamps and call timer below are all real, not sample data.
+
+| Chats | Thread | Nearby |
+|---|---|---|
+| ![Chat list on Android](docs/screenshots/mobile-chats.png) | ![1:1 thread with timestamps](docs/screenshots/mobile-thread.png) | ![Nearby / find people](docs/screenshots/mobile-nearby.png) |
+
+| Audio call (connected) | Video call |
+|---|---|
+| ![Connected audio call](docs/screenshots/mobile-call.png) | ![Video call with local preview](docs/screenshots/mobile-video-call.png) |
+
+Both call screenshots are of an actual WebRTC session between two devices —
+the audio one shows the live call timer, not a "Calling…" placeholder.
+
+### Web
+
+Same React Native codebase, rendered through react-native-web (`npm run web`).
 
 | Chats | Thread | Group |
 |---|---|---|
 | ![Chat list](docs/screenshots/chats.png) | ![1:1 thread](docs/screenshots/thread.png) | ![Group chat](docs/screenshots/group.png) |
-
-| Calls | Nearby | In-call |
-|---|---|---|
-| ![Call history](docs/screenshots/calls.png) | ![Nearby devices](docs/screenshots/nearby.png) | ![Audio call](docs/screenshots/call.png) |
 
 **Real end-to-end encrypted message, live between two accounts:**
 

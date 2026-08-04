@@ -88,6 +88,15 @@ export interface FetchedPrekeyBundleDto {
   oneTimePreKey: { keyId: number; publicKey: string } | null;
 }
 
+/**
+ * GET /keys/prekeys/:userId — one entry per registered device. The top-level
+ * fields mirror `bundles[0]` for older readers; `bundles` is what senders
+ * should use so every device gets a copy.
+ */
+export interface FetchedPrekeyBundlesDto extends FetchedPrekeyBundleDto {
+  bundles?: FetchedPrekeyBundleDto[];
+}
+
 export interface PresenceDto {
   userId: string;
   status: "online" | "wifi" | "ble" | "offline";

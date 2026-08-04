@@ -35,7 +35,14 @@ export function GroupScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.messages}>
         {messages.map((m) => (
-          <MessageBubble key={m.id} fromMe={m.fromMe} text={m.text} senderName={m.senderName} />
+          <MessageBubble
+            key={m.id}
+            fromMe={m.fromMe}
+            text={m.text}
+            senderName={m.senderName}
+            createdAt={m.createdAt}
+            pending={m.pending}
+          />
         ))}
       </ScrollView>
       <Composer onSend={() => undefined} />

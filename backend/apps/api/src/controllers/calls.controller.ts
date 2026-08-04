@@ -1,5 +1,7 @@
+import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { CallModel, ConversationModel, OutboxEventModel } from "@darkline/db";
+import { env } from "@darkline/config";
 import type { CallEventPayload } from "@darkline/shared-types";
 import { HttpError } from "../lib/HttpError";
 import { publishEvent } from "../lib/kafka";
@@ -68,4 +70,33 @@ export async function listCalls(req: Request, res: Response) {
 
   const calls = await CallModel.find(query).sort({ startedAt: -1 }).limit(limit);
   res.json({ calls });
+}
+
+// ── GET /calls/ice-servers — STUN + ephemeral TURN credentials ───────────
+/**
+ * coturn's REST-API (ephemeral credential) scheme: the username is
+ * "<expiry-unix-ts>:<userId>" and the password is the base64 HMAC-SHA1 of
+ * that username keyed with the shared secret coturn was started with
+ * (--static-auth-secret, which must equal TURN_SECRET). coturn recomputes
+ * the same HMAC to validate, so no per-user credential is ever stored.
+ *
+ * TURN is optional: with TURN_URL/TURN_SECRET unset the client still gets
+ * STUN, which covers most direct-connect cases and fails only behind
+ * symmetric NAT.
+ */
+const TURN_CREDENTIAL_TTL_SEC = 12 * 60 * 60;
+
+export async function getIceServers(req: Request, res: Response) {
+  const iceServers: Array<{ urls: string | string[]; username?: string; credential?: string }> = [
+    { urls: "stun:stun.l.google.com:19302" },
+  ];
+
+  if (env.TURN_URL && env.TURN_SECRET) {
+    const expiry = Math.floor(Date.now() / 1000) + TURN_CREDENTIAL_TTL_SEC;
+    const username = `${expiry}:${req.userId}`;
+    const credential = crypto.createHmac("sha1", env.TURN_SECRET).update(username).digest("base64");
+    iceServers.push({ urls: env.TURN_URL, username, credential });
+  }
+
+  res.json({ iceServers });
 }

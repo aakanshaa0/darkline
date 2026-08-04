@@ -32,6 +32,23 @@ export interface WifiDirectConnectionInfo {
   isConnected: boolean;
 }
 
+/**
+ * What callStore needs from a signaling path, satisfied by both ws-signaling
+ * (socket.io, internet) and a WiFi Direct TCP link (offline). Deliberately a
+ * subset of socket.io's surface so the internet adapter is a passthrough and
+ * the offline one only has to implement event dispatch over JSON lines.
+ */
+export type CallTransportMode = "internet" | "local";
+
+export interface CallSignaling {
+  mode: CallTransportMode;
+  emit(event: string, payload: Record<string, unknown>): void;
+  /** Generic in the payload so handlers declare their own shape without casts. */
+  on<T>(event: string, cb: (payload: T) => void): void;
+  once<T>(event: string, cb: (payload: T) => void): void;
+  close(): void;
+}
+
 export interface WifiDirectTransport {
   initialize(): Promise<void>;
   discoverPeers(onPeersChanged: (peers: WifiDirectPeer[]) => void): Promise<void>;
