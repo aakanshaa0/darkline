@@ -1,7 +1,8 @@
-import React from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
+import React, { useEffect } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
 import {
   useAppStore,
+  useChatStore,
   getContactsView,
   getCallBannerMode,
   getCallBannerText,
@@ -19,6 +20,23 @@ import {
   CallBanner,
   CallControls,
 } from "../app/components";
+import {
+  SplashScreen,
+  AuthScreen,
+  SignUpScreen,
+  LoginScreen,
+  EmailVerifyScreen,
+  ForgotPasswordScreen,
+  ResetPasswordScreen,
+  PhoneEntryScreen,
+  OTPVerifyScreen,
+  AccountExistsScreen,
+  AccountLockedScreen,
+  SessionExpiredScreen,
+  ProfileSetupScreen,
+  AccountScreen,
+  LinkedAccountsScreen,
+} from "../app/screens/auth";
 import { colors, typography } from "../app/theme/tokens";
 
 const NAV_ITEMS: { tab: Tab; icon: string; label: string }[] = [
@@ -30,20 +48,89 @@ const NAV_ITEMS: { tab: Tab; icon: string; label: string }[] = [
 const TAB_TITLE: Record<Tab, string> = { chats: "Chats", calls: "Calls", nearby: "Nearby" };
 
 /**
- * Three-pane web shell: nav rail + persistent list panel + a right panel
- * that swaps content based on `screen` — ported from
- * docs/design-reference/Darkline Web.dc.html. Unlike mobile, splash/auth/
- * profile don't apply here (design-handoff.md: "Web currently has no
- * splash/auth/profile-setup screens — it opens directly into the app
- * shell"), so this ignores those `screen` values entirely.
+ * Root export — gates the three-pane shell behind real auth now (the
+ * original prototype had no web auth at all; design-handoff.md flagged
+ * this as something to "add... if the web product needs its own sign-in",
+ * which it now does). Session persistence via bootstrapSession() means a
+ * page reload doesn't force a re-login as long as the stored refresh
+ * token is still valid.
  */
 export default function WebApp(): React.JSX.Element {
+  const bootstrapping = useAppStore((s) => s.bootstrapping);
+  const currentUserId = useAppStore((s) => s.currentUserId);
+  const bootstrapSession = useAppStore((s) => s.bootstrapSession);
+  const screen = useAppStore((s) => s.screen);
+  const navigate = useAppStore((s) => s.navigate);
+
+  useEffect(() => {
+    bootstrapSession();
+  }, [bootstrapSession]);
+
+  // Web skips the mobile splash/tap-through — go straight to the method picker.
+  useEffect(() => {
+    if (!bootstrapping && !currentUserId && screen === "splash") navigate("auth");
+  }, [bootstrapping, currentUserId, screen, navigate]);
+
+  if (bootstrapping) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator color={colors.accent} size="large" />
+      </View>
+    );
+  }
+
+  if (!currentUserId) {
+    return <WebAuthScreens screen={screen} />;
+  }
+
+  return <AuthenticatedShell />;
+}
+
+function WebAuthScreens({ screen }: { screen: string }) {
+  return (
+    <View style={styles.authSplit}>
+      <View style={styles.authBrandPanel}>
+        <Logo size={72} />
+        <Text style={styles.authBrandName}>darkline</Text>
+        <Text style={styles.authBrandTagline}>
+          Online over the internet, local over WiFi Direct, or fully offline over Bluetooth mesh — the same app,
+          the same contacts, three transports.
+        </Text>
+      </View>
+      <ScrollView style={styles.authFormPanel} contentContainerStyle={styles.authFormPanelContent}>
+        <View style={styles.authFormWrap}>
+          {screen === "splash" && <SplashScreen />}
+          {screen === "auth" && <AuthScreen />}
+          {screen === "signup" && <SignUpScreen />}
+          {screen === "login" && <LoginScreen />}
+          {screen === "emailVerify" && <EmailVerifyScreen />}
+          {screen === "forgotPassword" && <ForgotPasswordScreen />}
+          {screen === "resetPassword" && <ResetPasswordScreen />}
+          {screen === "phoneEntry" && <PhoneEntryScreen />}
+          {screen === "otpVerify" && <OTPVerifyScreen />}
+          {screen === "accountExists" && <AccountExistsScreen />}
+          {screen === "accountLocked" && <AccountLockedScreen />}
+          {screen === "sessionExpired" && <SessionExpiredScreen />}
+          {screen === "profile" && <ProfileSetupScreen />}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function AuthenticatedShell() {
   const screen = useAppStore((s) => s.screen);
   const tab = useAppStore((s) => s.tab);
   const setTab = useAppStore((s) => s.setTab);
   const openThread = useAppStore((s) => s.openThread);
   const openGroup = useAppStore((s) => s.openGroup);
   const startCall = useAppStore((s) => s.startCall);
+  const navigate = useAppStore((s) => s.navigate);
+
+  // "account"/"linkedAccounts" reuse the mobile screens too — simplest way
+  // to get a working account/logout surface on web without a second UI.
+  if (screen === "account") return <AccountScreen />;
+  if (screen === "linkedAccounts") return <LinkedAccountsScreen />;
 
   return (
     <View style={styles.root}>
@@ -59,7 +146,9 @@ export default function WebApp(): React.JSX.Element {
           </Pressable>
         ))}
         <View style={{ flex: 1 }} />
-        <Avatar initials="ME" size={32} />
+        <Pressable onPress={() => navigate("account")}>
+          <Avatar initials="ME" size={32} />
+        </Pressable>
       </View>
 
       <View style={styles.listPanel}>
@@ -89,14 +178,15 @@ export default function WebApp(): React.JSX.Element {
 }
 
 function ThreadPanel() {
-  const contacts = useAppStore((s) => s.contacts);
+  const contacts = useChatStore((s) => s.contacts);
   const activeContactId = useAppStore((s) => s.activeContactId);
-  const messages = useAppStore((s) => s.messages);
-  const sendDemo = useAppStore((s) => s.sendDemo);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const messagesByConversation = useChatStore((s) => s.messagesByConversation);
+  const sendMessage = useChatStore((s) => s.sendMessage);
   const startCall = useAppStore((s) => s.startCall);
 
   const activeContact = getContactsView(contacts).find((c) => c.id === activeContactId);
-  const activeMessages = (activeContactId && messages[activeContactId]) || [];
+  const activeMessages = (activeConversationId && messagesByConversation[activeConversationId]) || [];
   if (!activeContact) return null;
 
   return (
@@ -111,41 +201,45 @@ function ThreadPanel() {
         callNote={activeContact.callNote}
       />
       <ScrollView contentContainerStyle={styles.messages}>
-        {activeMessages.map((m, i) => (
-          <MessageBubble key={i} fromMe={m.fromMe} text={m.text} maxWidthPercent={52} />
+        {activeMessages.map((m) => (
+          <MessageBubble key={m.id} fromMe={m.fromMe} text={m.text} maxWidthPercent={52} />
         ))}
       </ScrollView>
-      <Composer onSend={sendDemo} />
+      <Composer onSend={sendMessage} />
     </View>
   );
 }
 
 function GroupPanel() {
-  const groupMessages = useAppStore((s) => s.groupMessages);
-  const sendGroupDemo = useAppStore((s) => s.sendGroupDemo);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const conversations = useChatStore((s) => s.conversations);
+  const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const startGroupCall = useAppStore((s) => s.startGroupCall);
+
+  const conversation = conversations.find((c) => c.id === activeConversationId);
+  const messages = (activeConversationId && messagesByConversation[activeConversationId]) || [];
 
   return (
     <View style={{ flex: 1 }}>
       <ThreadHeader
-        initials="TR"
-        title="Trip Plan"
-        subtitle="5 members"
+        initials={(conversation?.name ?? "GR").slice(0, 2).toUpperCase()}
+        title={conversation?.name ?? "Group"}
+        subtitle="Group chat"
         canCall
         onStartVideoCall={startGroupCall}
       />
       <ScrollView contentContainerStyle={styles.messages}>
-        {groupMessages.map((m, i) => (
-          <MessageBubble key={i} fromMe={m.fromMe} text={m.text} senderName={m.senderName} maxWidthPercent={52} />
+        {messages.map((m) => (
+          <MessageBubble key={m.id} fromMe={m.fromMe} text={m.text} senderName={m.senderName} maxWidthPercent={52} />
         ))}
       </ScrollView>
-      <Composer onSend={sendGroupDemo} />
+      <Composer onSend={() => undefined} />
     </View>
   );
 }
 
 function CallPanel() {
-  const contacts = useAppStore((s) => s.contacts);
+  const contacts = useChatStore((s) => s.contacts);
   const callContactId = useAppStore((s) => s.callContactId);
   const callKind = useAppStore((s) => s.callKind);
   const callPhase = useAppStore((s) => s.callPhase);
@@ -195,13 +289,6 @@ function CallPanel() {
   );
 }
 
-const GROUP_CALL_TILES = [
-  { label: "JM", active: false },
-  { label: "SA", active: false },
-  { label: "TK", active: true },
-  { label: "+2", active: false },
-];
-
 function GroupCallPanel() {
   const muted = useAppStore((s) => s.muted);
   const endCall = useAppStore((s) => s.endCall);
@@ -209,14 +296,8 @@ function GroupCallPanel() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Text style={styles.groupCallBanner}>Group call · Trip Plan</Text>
-      <View style={styles.grid}>
-        {GROUP_CALL_TILES.map((t) => (
-          <View key={t.label} style={[styles.tile, t.active && styles.tileActive]}>
-            <Text style={styles.tileLabel}>{t.label}</Text>
-          </View>
-        ))}
-      </View>
+      <Text style={styles.groupCallBanner}>Group call</Text>
+      <View style={styles.grid} />
       <CallControls
         kind="group"
         muted={muted}
@@ -230,6 +311,55 @@ function GroupCallPanel() {
 }
 
 const styles = StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
+  },
+  authSplit: {
+    flex: 1,
+    height: "100%",
+    flexDirection: "row",
+    backgroundColor: colors.background,
+  },
+  authBrandPanel: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    padding: 48,
+    backgroundColor: colors.tabBarBg,
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
+  },
+  authBrandName: {
+    fontSize: typography.sizes.title,
+    fontWeight: "700",
+    color: colors.textPrimary,
+    letterSpacing: 0.5,
+  },
+  authBrandTagline: {
+    fontSize: typography.sizes.body,
+    color: colors.textSecondary,
+    textAlign: "center",
+    maxWidth: 360,
+    lineHeight: 21,
+  },
+  authFormPanel: {
+    flex: 1,
+  },
+  authFormPanelContent: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  authFormWrap: {
+    width: "100%",
+    maxWidth: 440,
+  },
   root: {
     flexDirection: "row",
     height: "100%",

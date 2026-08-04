@@ -40,14 +40,21 @@ async function refreshAccessToken(): Promise<string | null> {
   return data.accessToken;
 }
 
+/**
+ * Built by hand rather than via `new URL(...).searchParams` — React Native's
+ * URL polyfill (Libraries/Blob/URL.js) ships a URLSearchParams whose `set`
+ * throws "not implemented", so the URL route threw on every query-param
+ * request and callers swallowed it as an empty result.
+ */
 function buildUrl(path: string, query?: RequestOptions["query"]): string {
-  const url = new URL(`${API_BASE_URL}${path}`);
-  if (query) {
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined) url.searchParams.set(key, String(value));
-    }
-  }
-  return url.toString();
+  const base = `${API_BASE_URL}${path}`;
+  if (!query) return base;
+
+  const pairs = Object.entries(query)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+
+  return pairs.length > 0 ? `${base}?${pairs.join("&")}` : base;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -79,7 +86,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = json?.error ?? { code: "UNKNOWN", message: res.statusText };
-    throw new ApiError(res.status, err.code, err.message);
+    // VALIDATION_ERROR's top-level message is a generic "Invalid request" — the
+    // actionable detail is in `issues` (zod's per-field messages). Surface the
+    // first one so the user learns *why*, not just *that* something's wrong.
+    const message = err.code === "VALIDATION_ERROR" && err.issues?.[0]?.message ? err.issues[0].message : err.message;
+    throw new ApiError(res.status, err.code, message);
   }
   return json as T;
 }

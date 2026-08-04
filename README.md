@@ -1,6 +1,9 @@
 <div align="center">
 
-# darkline
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+  <img src="docs/logo-light.svg" alt="darkline" height="90">
+</picture>
 
 **A chat & calling app that never fully goes dark.**
 Online over the internet, local over WiFi Direct, or fully offline over Bluetooth mesh — the same app, the same contacts, three transports.
@@ -18,6 +21,24 @@ Darkline is a WhatsApp-shaped chat/voice/video app built around one idea: connec
 - **Offline** — no network at all. Text messages still relay over a Bluetooth LE mesh to nearby devices (audio/video isn't possible at BLE bandwidths).
 
 Every message is end-to-end encrypted regardless of which of the three transports it travels over — the server (and any BLE hop) only ever sees ciphertext.
+
+## Screenshots
+
+Captured from the actual running web build (`npm run web`) — same React Native codebase that renders the iOS/Android apps. The six-panel set below uses sample data to show every screen at once; the two-panel set after it is from a real live test — two separate accounts, signed up and paired for real, exchanging a message that was actually encrypted and decrypted with real libsodium keys (see [Project status](#project-status)).
+
+| Chats | Thread | Group |
+|---|---|---|
+| ![Chat list](docs/screenshots/chats.png) | ![1:1 thread](docs/screenshots/thread.png) | ![Group chat](docs/screenshots/group.png) |
+
+| Calls | Nearby | In-call |
+|---|---|---|
+| ![Call history](docs/screenshots/calls.png) | ![Nearby devices](docs/screenshots/nearby.png) | ![Audio call](docs/screenshots/call.png) |
+
+**Real end-to-end encrypted message, live between two accounts:**
+
+| Sender ("Alice") | Recipient ("Bob") |
+|---|---|
+| ![Alice sends an E2EE message](docs/screenshots/e2e-alice-sent.png) | ![Bob receives and decrypts it in real time](docs/screenshots/e2e-bob-received.png) |
 
 ## Features
 

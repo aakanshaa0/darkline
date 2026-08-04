@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, TextInput, StyleSheet } from "react-native";
 import { useAppStore } from "@shared/store";
 import { PillButton, TextField } from "../../components";
 import { colors, shape, typography } from "../../theme/tokens";
@@ -9,7 +9,11 @@ export function PhoneEntryScreen() {
   const sendPhoneOtp = useAppStore((s) => s.sendPhoneOtp);
   const authLoading = useAppStore((s) => s.authLoading);
   const authError = useAppStore((s) => s.authError);
+  const [countryCode, setCountryCode] = useState("+1");
   const [phone, setPhone] = useState("");
+
+  const fullNumber = `${countryCode}${phone}`.replace(/[\s-]/g, "");
+  const canSubmit = phone.trim().length > 0 && countryCode.startsWith("+") && countryCode.length > 1;
 
   return (
     <View style={styles.container}>
@@ -19,9 +23,14 @@ export function PhoneEntryScreen() {
       <View style={styles.body}>
         <Text style={styles.title}>Enter your phone number</Text>
         <View style={styles.row}>
-          <View style={styles.countryCode}>
-            <Text style={styles.countryCodeText}>+1</Text>
-          </View>
+          <TextInput
+            style={styles.countryCode}
+            value={countryCode}
+            onChangeText={setCountryCode}
+            keyboardType="phone-pad"
+            placeholder="+1"
+            placeholderTextColor={colors.textSecondary}
+          />
           <View style={{ flex: 1 }}>
             <TextField placeholder="Phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
           </View>
@@ -30,7 +39,7 @@ export function PhoneEntryScreen() {
         <PillButton
           label={authLoading ? "Sending code…" : "Continue"}
           variant="filled"
-          onPress={() => phone && !authLoading && sendPhoneOtp(phone)}
+          onPress={() => canSubmit && !authLoading && sendPhoneOtp(fullNumber)}
         />
       </View>
     </View>

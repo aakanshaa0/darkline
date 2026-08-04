@@ -36,7 +36,12 @@ export function SignUpScreen() {
         <Text style={styles.title}>Create your account</Text>
         <View style={styles.fields}>
           <TextField placeholder="Name" value={name} onChangeText={setName} autoCapitalize="words" />
-          <TextField placeholder="Username" value={username} onChangeText={setUsername} />
+          <TextField
+            placeholder="Username"
+            value={username}
+            onChangeText={(text) => setUsername(text.toLowerCase())}
+            autoCapitalize="none"
+          />
           <TextField placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
           <TextField placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
           <TextField

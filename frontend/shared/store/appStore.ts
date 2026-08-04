@@ -1,7 +1,10 @@
 import { create } from "zustand";
+import { Platform } from "react-native";
 import type { Presence } from "@shared/connectivity";
 import { authApi, prekeysApi, connectSocket, disconnectSocket, loadTokens, ApiError, type AuthResult } from "@shared/api";
 import { loadOrCreateIdentity } from "@shared/crypto";
+import { useChatStore } from "./chatStore";
+import { useCallStore } from "./callStore";
 
 /**
  * State shape ported directly from the prototype's Component.state in
@@ -41,24 +44,11 @@ export type Tab = "chats" | "calls" | "nearby";
 export type CallKind = "audio" | "video";
 export type CallPhase = "ringing" | "active";
 
-export interface Contact {
-  id: string;
-  name: string;
-  initials: string;
-  presence: Presence;
-  sub: string;
-}
-
-export interface ChatMessage {
-  fromMe: boolean;
-  text: string;
-}
-
-export interface GroupMessage {
-  fromMe: boolean;
-  text: string;
-  senderName?: string;
-}
+// Live contacts/conversations/messages live in ./chatStore now — this
+// store owns navigation, auth, and call-UI state only. Kept here as
+// re-exports so existing imports of `Contact` etc. from "@shared/store"
+// don't need to change.
+export type { LiveContact as Contact, DecryptedMessage as ChatMessage } from "./chatStore";
 
 interface AppState {
   screen: Screen;
@@ -70,11 +60,9 @@ interface AppState {
   muted: boolean;
   speakerOn: boolean;
   addedNearby: Record<string, boolean>;
-  contacts: Contact[];
-  messages: Record<string, ChatMessage[]>;
-  groupMessages: GroupMessage[];
 
   // ── Real auth wiring (shared/api) — see signupWithEmail etc. below ──
+  bootstrapping: boolean; // true until the stored-token rehydration check resolves
   authLoading: boolean;
   authError: string | null;
   currentUserId: string | null;
@@ -85,10 +73,8 @@ interface AppState {
   goHome: () => void;
   backToHome: () => void;
   setTab: (tab: Tab) => void;
-  openThread: (id: string) => void;
-  openGroup: () => void;
-  sendDemo: () => void;
-  sendGroupDemo: () => void;
+  openThread: (contactUserId: string) => void;
+  openGroup: (conversationId: string) => void;
   addNearby: (id: string) => void;
   startCall: (contactId: string | null, kind: CallKind) => void;
   startGroupCall: () => void;
@@ -96,20 +82,13 @@ interface AppState {
   toggleMute: () => void;
   toggleSpeaker: () => void;
 
+  bootstrapSession: () => Promise<void>;
   signupWithEmail: (name: string, username: string, email: string, password: string) => Promise<void>;
   verifyEmailCode: (code: string) => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   sendPhoneOtp: (phone: string) => Promise<void>;
   verifyPhoneOtpCode: (code: string) => Promise<void>;
   logoutUser: () => Promise<void>;
-}
-
-let callTimer: ReturnType<typeof setTimeout> | null = null;
-function clearCallTimer() {
-  if (callTimer) {
-    clearTimeout(callTimer);
-    callTimer = null;
-  }
 }
 
 export const useAppStore = create<AppState>()((set, get) => ({
@@ -123,72 +102,31 @@ export const useAppStore = create<AppState>()((set, get) => ({
   speakerOn: false,
   addedNearby: {},
 
+  bootstrapping: true,
   authLoading: false,
   authError: null,
   currentUserId: null,
   pendingAuthUserId: null,
   pendingPhone: null,
 
-  contacts: [
-    { id: "jordan", name: "Jordan M.", initials: "JM", presence: "online", sub: "on my way!" },
-    { id: "sara", name: "Sara A.", initials: "SA", presence: "online", sub: "sent a photo" },
-    { id: "tariq", name: "Tariq K.", initials: "TK", presence: "wifi", sub: "chat + call" },
-    { id: "priya", name: "Priya L.", initials: "PL", presence: "ble", sub: "text only, no signal" },
-    { id: "dana", name: "Dana W.", initials: "DW", presence: "offline", sub: "last seen 2h ago" },
-  ],
-
-  messages: {
-    jordan: [
-      { fromMe: false, text: "Hey, you around later?" },
-      { fromMe: true, text: "Yeah, free after 6" },
-    ],
-    sara: [
-      { fromMe: false, text: "Sent a photo from the trip" },
-      { fromMe: true, text: "That view is incredible" },
-    ],
-    tariq: [
-      { fromMe: false, text: "Are you nearby right now?" },
-      { fromMe: true, text: "Yeah, connected via wifi direct" },
-    ],
-    priya: [
-      { fromMe: false, text: "Are you nearby right now?" },
-      { fromMe: true, text: "Yeah, relaying over bluetooth mesh" },
-    ],
-    dana: [
-      { fromMe: false, text: "Running late, sorry!" },
-      { fromMe: true, text: "No worries — this'll sync once you're back online" },
-    ],
-  },
-
-  groupMessages: [
-    { fromMe: false, senderName: "Sara", text: "How about Saturday?" },
-    { fromMe: false, senderName: "Jordan", text: "Works for me" },
-    { fromMe: true, text: "I'm in too" },
-  ],
-
   navigate: (screen) => set({ screen }),
   goHome: () => set({ screen: "home", tab: "chats" }),
   backToHome: () => set({ screen: "home" }),
   setTab: (tab) => set({ screen: "home", tab }),
-  openThread: (id) => set({ screen: "thread", activeContactId: id }),
-  openGroup: () => set({ screen: "group" }),
 
-  sendDemo: () => {
-    const { activeContactId, messages } = get();
-    if (!activeContactId) return;
-    const msgs = messages[activeContactId] ?? [];
-    set({
-      messages: { ...messages, [activeContactId]: [...msgs, { fromMe: true, text: "Got it 👍" }] },
-    });
+  openThread: (contactUserId) => {
+    set({ screen: "thread", activeContactId: contactUserId });
+    useChatStore.getState().openDirectConversation(contactUserId);
   },
 
-  sendGroupDemo: () =>
-    set((s) => ({ groupMessages: [...s.groupMessages, { fromMe: true, text: "Sounds good!" }] })),
+  openGroup: (conversationId) => {
+    set({ screen: "group" });
+    useChatStore.getState().openGroupConversation(conversationId);
+  },
 
   addNearby: (id) => set((s) => ({ addedNearby: { ...s.addedNearby, [id]: true } })),
 
   startCall: (contactId, kind) => {
-    clearCallTimer();
     set({
       screen: "call",
       callContactId: contactId,
@@ -197,18 +135,39 @@ export const useAppStore = create<AppState>()((set, get) => ({
       muted: false,
       speakerOn: false,
     });
-    callTimer = setTimeout(() => set({ callPhase: "active" }), 1200);
+    if (contactId) useCallStore.getState().placeCall(contactId, kind);
   },
 
   startGroupCall: () => set({ screen: "groupcall" }),
 
   endCall: () => {
-    clearCallTimer();
+    useCallStore.getState().hangUp();
     set((s) => ({ screen: s.screen === "groupcall" ? "group" : "thread" }));
   },
 
-  toggleMute: () => set((s) => ({ muted: !s.muted })),
+  toggleMute: () =>
+    set((s) => {
+      const next = !s.muted;
+      useCallStore.getState().setLocalAudioEnabled(!next);
+      return { muted: next };
+    }),
   toggleSpeaker: () => set((s) => ({ speakerOn: !s.speakerOn })),
+
+  bootstrapSession: async () => {
+    const tokens = await loadTokens();
+    if (!tokens) {
+      set({ bootstrapping: false });
+      return;
+    }
+    try {
+      const { user } = await authApi.me();
+      set({ bootstrapping: false, currentUserId: user._id, screen: "home", tab: "chats" });
+      await afterAuthenticated(user._id);
+    } catch {
+      // httpClient's 401 handling already tried a refresh and cleared tokens if that failed too.
+      set({ bootstrapping: false });
+    }
+  },
 
   signupWithEmail: async (name, username, email, password) => {
     set({ authLoading: true, authError: null });
@@ -228,7 +187,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       const result = await authApi.verifyEmail({ userId: pendingAuthUserId, code });
       // name/username were already collected by SignUpScreen (POST /auth/signup
       // requires them upfront), so no need to route through ProfileSetupScreen here.
-      await completeAuth(set, result, "biometricPrompt");
+      await completeAuth(set, result, Platform.OS === "web" ? "home" : "biometricPrompt");
     } catch (err) {
       set({ authLoading: false, authError: authErrorMessage(err) });
     }
@@ -238,7 +197,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set({ authLoading: true, authError: null });
     try {
       const result = await authApi.login({ email, password });
-      await completeAuth(set, result, "biometricPrompt");
+      await completeAuth(set, result, Platform.OS === "web" ? "home" : "biometricPrompt");
     } catch (err) {
       set({ authLoading: false, authError: authErrorMessage(err) });
       if (err instanceof ApiError && err.code === "ACCOUNT_LOCKED") set({ screen: "accountLocked" });
@@ -261,7 +220,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set({ authLoading: true, authError: null });
     try {
       const result = await authApi.phoneVerifyOtp({ phone: pendingPhone, code });
-      await completeAuth(set, result, result.isNewUser ? "profile" : "biometricPrompt");
+      // New accounts (phone signup) still need a name/username on every platform —
+      // only the biometric/push onboarding prompts after it are mobile-only.
+      const nextScreen = result.isNewUser ? "profile" : Platform.OS === "web" ? "home" : "biometricPrompt";
+      await completeAuth(set, result, nextScreen);
     } catch (err) {
       set({ authLoading: false, authError: authErrorMessage(err) });
     }
@@ -278,6 +240,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
       }
     }
     disconnectSocket();
+    useChatStore.getState().reset();
+    useCallStore.getState().reset();
     set({ currentUserId: null, pendingAuthUserId: null, pendingPhone: null, screen: "auth" });
   },
 }));
@@ -287,17 +251,14 @@ function authErrorMessage(err: unknown): string {
 }
 
 /**
- * Shared tail end of every successful signup/login/OTP/Google flow:
- * bootstrap the local E2EE identity (generating+uploading one on first
- * run — see shared/crypto), connect the signaling socket, and move on to
- * the onboarding chain (or straight to profile setup for brand-new users).
+ * Runs after every successful signup/login/OTP/Google flow AND after a
+ * successful session-rehydration on app start (bootstrapSession): bootstrap
+ * the local E2EE identity (generating+uploading one on first run — see
+ * shared/crypto), connect the signaling socket, register its listeners,
+ * and load the real contacts/conversations list.
  */
-async function completeAuth(
-  set: (partial: Partial<AppState>) => void,
-  result: AuthResult,
-  nextScreen: Screen,
-): Promise<void> {
-  set({ authLoading: false, currentUserId: result.user._id, pendingAuthUserId: null, pendingPhone: null });
+async function afterAuthenticated(userId: string): Promise<void> {
+  useChatStore.getState().setCurrentUserId(userId);
 
   try {
     const { freshBundle } = await loadOrCreateIdentity();
@@ -308,10 +269,27 @@ async function completeAuth(
   }
 
   try {
-    await connectSocket();
+    const socket = await connectSocket();
+    useChatStore.getState().registerSocketListeners(socket);
+    useCallStore.getState().registerCallSignaling();
   } catch {
     // Non-fatal — ws-signaling may be unreachable; REST still works.
   }
 
+  useChatStore.getState().loadInitialData();
+  useCallStore.getState().loadCallHistory();
+}
+
+/**
+ * Shared tail end of every successful signup/login/OTP/Google flow —
+ * see afterAuthenticated() above for what actually runs.
+ */
+async function completeAuth(
+  set: (partial: Partial<AppState>) => void,
+  result: AuthResult,
+  nextScreen: Screen,
+): Promise<void> {
+  set({ authLoading: false, currentUserId: result.user._id, pendingAuthUserId: null, pendingPhone: null });
+  await afterAuthenticated(result.user._id);
   set({ screen: nextScreen });
 }

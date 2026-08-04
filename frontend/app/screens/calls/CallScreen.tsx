@@ -1,11 +1,11 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { useAppStore, getContactsView, getCallBannerMode, getCallBannerText } from "@shared/store";
+import { useAppStore, useChatStore, getContactsView, getCallBannerMode, getCallBannerText } from "@shared/store";
 import { CallBanner, CallControls } from "../../components";
 import { colors, typography } from "../../theme/tokens";
 
 export function CallScreen() {
-  const contacts = useAppStore((s) => s.contacts);
+  const contacts = useChatStore((s) => s.contacts);
   const callContactId = useAppStore((s) => s.callContactId);
   const callKind = useAppStore((s) => s.callKind);
   const callPhase = useAppStore((s) => s.callPhase);

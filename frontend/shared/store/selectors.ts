@@ -60,10 +60,10 @@ export function getNearbyModeLabel(presence: Presence): string {
 }
 
 export interface CallHistoryEntry {
-  id: number;
+  id: string;
   name: string;
   initials: string;
-  kind: "audio" | "video";
+  kind: "audio" | "video" | "group";
   mode: "internet" | "local" | "ble";
   missed: boolean;
   duration: string;
@@ -72,72 +72,6 @@ export interface CallHistoryEntry {
   kindLabel: string;
   modeLabel: string;
 }
-
-// Static demo data — real call history comes from GET /calls (Part D.2) once the API is wired up.
-export const CALL_HISTORY: CallHistoryEntry[] = [
-  {
-    id: 1,
-    name: "Jordan M.",
-    initials: "JM",
-    kind: "video",
-    mode: "internet",
-    missed: false,
-    duration: "12:04",
-    time: "Today, 2:14 PM",
-    contactId: "jordan",
-    kindLabel: "Video",
-    modeLabel: "internet",
-  },
-  {
-    id: 2,
-    name: "Tariq K.",
-    initials: "TK",
-    kind: "audio",
-    mode: "local",
-    missed: false,
-    duration: "3:40",
-    time: "Today, 11:02 AM",
-    contactId: "tariq",
-    kindLabel: "Audio",
-    modeLabel: "local network",
-  },
-  {
-    id: 3,
-    name: "Priya L.",
-    initials: "PL",
-    kind: "audio",
-    mode: "ble",
-    missed: true,
-    duration: "—",
-    time: "Yesterday",
-    contactId: "priya",
-    kindLabel: "Audio",
-    modeLabel: "bluetooth",
-  },
-];
-
-export interface UnknownDevice {
-  id: string;
-  name: string;
-  mode: "wifi" | "ble";
-  modeLabel: string;
-}
-
-// Static demo data — real nearby-device discovery comes from the native
-// WiFi-Direct/BLE scan layer (Part B.2), not the server.
-export const UNKNOWN_DEVICES: UnknownDevice[] = [
-  { id: "unknown1", name: "Unknown device", mode: "wifi", modeLabel: "WiFi direct" },
-];
-
-export interface GroupSummary {
-  id: string;
-  name: string;
-  initials: string;
-  count: number;
-}
-
-// Static demo data — real groups come from GET /conversations?type=group (Part D.2).
-export const GROUPS: GroupSummary[] = [{ id: "trip", name: "Trip Plan", initials: "TR", count: 5 }];
 
 export function getCallBannerMode(presence: Presence | undefined): "internet" | "local" {
   return presence === "wifi" ? "local" : "internet";

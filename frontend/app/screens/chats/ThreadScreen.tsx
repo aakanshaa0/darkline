@@ -1,20 +1,21 @@
 import React from "react";
 import { View, ScrollView, StyleSheet } from "react-native";
-import { useAppStore, getContactsView } from "@shared/store";
+import { useAppStore, useChatStore, getContactsView } from "@shared/store";
 import { ThreadHeader, MessageBubble, Composer } from "../../components";
 import { colors } from "../../theme/tokens";
 
 export function ThreadScreen() {
-  const contacts = useAppStore((s) => s.contacts);
+  const contacts = useChatStore((s) => s.contacts);
   const activeContactId = useAppStore((s) => s.activeContactId);
-  const messages = useAppStore((s) => s.messages);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const messagesByConversation = useChatStore((s) => s.messagesByConversation);
+  const sendMessage = useChatStore((s) => s.sendMessage);
   const backToHome = useAppStore((s) => s.backToHome);
-  const sendDemo = useAppStore((s) => s.sendDemo);
   const startCall = useAppStore((s) => s.startCall);
 
   const contactsView = getContactsView(contacts);
-  const activeContact = contactsView.find((c) => c.id === activeContactId) ?? contactsView[0];
-  const activeMessages = (activeContactId && messages[activeContactId]) || [];
+  const activeContact = contactsView.find((c) => c.id === activeContactId);
+  const activeMessages = (activeConversationId && messagesByConversation[activeConversationId]) || [];
 
   if (!activeContact) return null;
 
@@ -31,11 +32,11 @@ export function ThreadScreen() {
         callNote={activeContact.callNote}
       />
       <ScrollView contentContainerStyle={styles.messages}>
-        {activeMessages.map((m, i) => (
-          <MessageBubble key={i} fromMe={m.fromMe} text={m.text} />
+        {activeMessages.map((m) => (
+          <MessageBubble key={m.id} fromMe={m.fromMe} text={m.text} />
         ))}
       </ScrollView>
-      <Composer onSend={sendDemo} />
+      <Composer onSend={sendMessage} />
     </View>
   );
 }

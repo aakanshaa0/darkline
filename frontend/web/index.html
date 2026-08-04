@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Darkline</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      /* react-native-web's root wrapper renders with `flex: 1` — that only
+         stretches to fill a *flex* parent, so #root needs display:flex
+         itself, not just a height, or the app falls back to content height. */
+      #root { height: 100%; display: flex; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

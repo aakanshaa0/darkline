@@ -2,6 +2,7 @@ export * from "./Logo";
 export * from "./Avatar";
 export * from "./PresenceDot";
 export * from "./SectionLabel";
+export * from "./EmptyText";
 export * from "./PillButton";
 export * from "./IconCircleButton";
 export * from "./MessageBubble";

@@ -1,18 +1,20 @@
 import type { SodiumLike } from "./types";
 
 /**
- * Real X25519/Ed25519 authenticated encryption (libsodium crypto_box +
- * crypto_sign), simplified from full X3DH per the scope decision: a single
- * DH term (my identity ↔ their signed prekey), no ephemeral-per-session
- * key, no Double Ratchet — so there's no per-message forward secrecy yet.
- * Genuinely confidential and tamper-evident today; ratcheting is a real,
- * separately-scoped follow-up, not attempted here.
+ * Real X25519/Ed25519 authenticated encryption (libsodium crypto_box_seal +
+ * crypto_sign), simplified from full X3DH per the scope decision: no
+ * ephemeral-per-session key, no Double Ratchet — so there's no per-message
+ * forward secrecy yet. Genuinely confidential and tamper-evident today;
+ * ratcheting is a real, separately-scoped follow-up, not attempted here.
  *
- * One Ed25519 keypair serves both roles a normal X3DH identity key needs:
- * signing (natively) and Diffie-Hellman (via libsodium's documented
- * ed25519→curve25519 conversion, `crypto_sign_ed25519_*_to_curve25519`) —
- * this is the standard trick to avoid managing two separate identity
- * keypairs (Signal's XEdDSA does the same thing for the same reason).
+ * Confidentiality and authenticity are carried by two separate primitives
+ * rather than one authenticated DH: a sealed box to the recipient's signed
+ * prekey (confidentiality, with an ephemeral sender keypair libsodium
+ * generates internally) plus a detached Ed25519 signature over the
+ * ciphertext (authenticity). The more usual trick — one Ed25519 identity
+ * keypair serving both signing and DH via `crypto_sign_ed25519_*_to_curve25519`
+ * — is not available: react-native-libsodium implements only the `pk_` half
+ * of that conversion, so any sender-side DH derivation throws on native.
  *
  * One-time prekeys are still generated, uploaded, and consumed
  * server-side (GET /keys/prekeys/:userId marks one used per fetch, per
@@ -46,9 +48,9 @@ export interface FetchedPrekeyBundle {
 }
 
 export interface Envelope {
-  ciphertext: string; // base64
-  nonce: string; // base64
-  senderIdentityKey: string; // base64 ed25519 public key — recipient needs this to derive the shared secret and to know who sent it
+  ciphertext: string; // base64 — crypto_box_seal to the recipient's signed prekey
+  signature: string; // base64 — crypto_sign_detached over the raw ciphertext, proving who sent it
+  senderIdentityKey: string; // base64 ed25519 public key — the key `signature` is verified against
 }
 
 function toB64(sodium: SodiumLike, bytes: Uint8Array): string {
@@ -104,6 +106,15 @@ function verifiedSignedPreKeyPublic(sodium: SodiumLike, bundle: FetchedPrekeyBun
   return signedPreKeyPublic;
 }
 
+/**
+ * Sealed box + detached signature rather than a box_easy DH between the
+ * sender's identity key and the recipient's signed prekey: deriving the
+ * sender's X25519 secret needs crypto_sign_ed25519_sk_to_curve25519, which
+ * react-native-libsodium does not implement, so the DH form threw on every
+ * native send. crypto_box_seal generates its own ephemeral sender keypair,
+ * so no conversion is needed — and since a sealed box is anonymous, the
+ * detached signature is what carries sender authenticity.
+ */
 export function encryptForRecipient(
   sodium: SodiumLike,
   plaintext: string,
@@ -111,31 +122,35 @@ export function encryptForRecipient(
   myIdentity: LocalIdentity,
 ): Envelope {
   const recipientSignedPreKeyPublic = verifiedSignedPreKeyPublic(sodium, recipientBundle);
-  const myDhSecret = sodium.crypto_sign_ed25519_sk_to_curve25519(myIdentity.identity.privateKey);
 
-  const nonce = sodium.randombytes_buf(sodium.crypto_box_NONCEBYTES);
   const message = new TextEncoder().encode(plaintext);
-  const ciphertext = sodium.crypto_box_easy(message, nonce, recipientSignedPreKeyPublic, myDhSecret);
+  const ciphertext = sodium.crypto_box_seal(message, recipientSignedPreKeyPublic);
+  const signature = sodium.crypto_sign_detached(ciphertext, myIdentity.identity.privateKey);
 
   return {
     ciphertext: toB64(sodium, ciphertext),
-    nonce: toB64(sodium, nonce),
+    signature: toB64(sodium, signature),
     senderIdentityKey: toB64(sodium, myIdentity.identity.publicKey),
   };
 }
 
 export function decryptFromSender(sodium: SodiumLike, envelope: Envelope, myIdentity: LocalIdentity): string {
   const senderIdentityPublic = fromB64(sodium, envelope.senderIdentityKey);
-  const senderDhPublic = sodium.crypto_sign_ed25519_pk_to_curve25519(senderIdentityPublic);
-  const mySignedPreKeySecret = myIdentity.signedPreKey.keyPair.privateKey;
+  const ciphertext = fromB64(sodium, envelope.ciphertext);
 
-  const plaintext = sodium.crypto_box_open_easy(
-    fromB64(sodium, envelope.ciphertext),
-    fromB64(sodium, envelope.nonce),
-    senderDhPublic,
-    mySignedPreKeySecret,
+  // Verify before opening: a sealed box is anonymous, so an unverified
+  // envelope proves nothing about who wrote it.
+  const valid = sodium.crypto_sign_verify_detached(fromB64(sodium, envelope.signature), ciphertext, senderIdentityPublic);
+  if (!valid) {
+    throw new Error("Message signature verification failed — refusing to decrypt an unauthenticated envelope");
+  }
+
+  const plaintext = sodium.crypto_box_seal_open(
+    ciphertext,
+    myIdentity.signedPreKey.keyPair.publicKey,
+    myIdentity.signedPreKey.keyPair.privateKey,
   );
-  return new TextDecoder().decode(plaintext);
+  return sodium.to_string(plaintext);
 }
 
 // ── Group chat: Sender Keys (Part B.6) ────────────────────────────────────
@@ -165,7 +180,7 @@ export function decryptGroupMessage(sodium: SodiumLike, envelope: GroupEnvelope,
     fromB64(sodium, envelope.nonce),
     senderKey,
   );
-  return new TextDecoder().decode(plaintext);
+  return sodium.to_string(plaintext);
 }
 
 export function senderKeyToB64(sodium: SodiumLike, key: Uint8Array): string {

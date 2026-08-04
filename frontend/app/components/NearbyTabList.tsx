@@ -1,25 +1,47 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import {
-  useAppStore,
-  getNearbyContacts,
-  getNearbyModeLabel,
-  UNKNOWN_DEVICES,
-} from "@shared/store";
-import { colors, typography } from "../theme/tokens";
+import { useAppStore, useChatStore, getNearbyContacts, getNearbyModeLabel } from "@shared/store";
+import { colors, typography, shape } from "../theme/tokens";
 import { SectionLabel } from "./SectionLabel";
 import { ContactRow } from "./ContactRow";
+import { TextField } from "./TextField";
+import { Avatar } from "./Avatar";
+import { EmptyText } from "./EmptyText";
 
+/**
+ * "DISCOVERABLE NOW" still reflects real WiFi/BLE presence (Part B.3.C) —
+ * it's real, just will only show something once a contact's own device
+ * actually reports that presence mode (native-only, unverified here — see
+ * shared/p2p). The bottom section was the prototype's static "not yet a
+ * contact" BLE/WiFi list; that's replaced with a real username search +
+ * add flow (works on every platform, since it's just the REST API) so
+ * there's an actual way to get contacts into the list at all.
+ */
 export function NearbyTabList() {
-  const contacts = useAppStore((s) => s.contacts);
-  const addedNearby = useAppStore((s) => s.addedNearby);
-  const addNearby = useAppStore((s) => s.addNearby);
+  const contacts = useChatStore((s) => s.contacts);
+  const searchResults = useChatStore((s) => s.searchResults);
+  const searchLoading = useChatStore((s) => s.searchLoading);
+  const searchUsers = useChatStore((s) => s.searchUsers);
+  const addContact = useChatStore((s) => s.addContact);
   const openThread = useAppStore((s) => s.openThread);
   const nearby = getNearbyContacts(contacts);
+  const [query, setQuery] = useState("");
+  const [addedIds, setAddedIds] = useState<Record<string, boolean>>({});
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    searchUsers(value);
+  }
+
+  async function handleAdd(userId: string) {
+    await addContact(userId);
+    setAddedIds((prev) => ({ ...prev, [userId]: true }));
+  }
 
   return (
     <View>
       <SectionLabel>DISCOVERABLE NOW</SectionLabel>
+      {nearby.length === 0 && <EmptyText>No contacts nearby right now.</EmptyText>}
       {nearby.map((c) => (
         <ContactRow
           key={c.id}
@@ -30,23 +52,26 @@ export function NearbyTabList() {
           onPress={() => openThread(c.id)}
         />
       ))}
-      <SectionLabel>NOT YET A CONTACT</SectionLabel>
-      {UNKNOWN_DEVICES.map((u) => {
-        const added = !!addedNearby[u.id];
+
+      <SectionLabel>FIND PEOPLE</SectionLabel>
+      <View style={styles.searchField}>
+        <TextField placeholder="Search by username" value={query} onChangeText={handleQueryChange} />
+      </View>
+      {searchLoading && <EmptyText>Searching…</EmptyText>}
+      {searchResults.map((u) => {
+        const added = !!addedIds[u.id];
         return (
           <View key={u.id} style={styles.row}>
-            <View style={styles.unknownAvatar}>
-              <Text style={styles.unknownAvatarText}>?</Text>
-            </View>
+            <Avatar initials={(u.name || u.username || "?").slice(0, 2).toUpperCase()} size={shape.avatarMd} />
             <View style={styles.textCol}>
               <Text style={styles.name} numberOfLines={1}>
-                {u.name}
+                {u.name || u.username}
               </Text>
               <Text style={styles.sub} numberOfLines={1}>
-                {u.modeLabel}
+                @{u.username}
               </Text>
             </View>
-            <Pressable onPress={() => addNearby(u.id)} disabled={added}>
+            <Pressable onPress={() => handleAdd(u.id)} disabled={added}>
               <Text style={[styles.addLabel, { color: added ? colors.textSecondary : colors.accent }]}>
                 {added ? "Added" : "Add"}
               </Text>
@@ -59,24 +84,16 @@ export function NearbyTabList() {
 }
 
 const styles = StyleSheet.create({
+  searchField: {
+    paddingHorizontal: 18,
+    paddingBottom: 8,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     paddingVertical: 9,
     paddingHorizontal: 18,
-  },
-  unknownAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.surfaceRaised,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  unknownAvatarText: {
-    fontSize: 11,
-    color: colors.textSecondary,
   },
   textCol: {
     flex: 1,

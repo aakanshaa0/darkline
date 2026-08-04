@@ -1,4 +1,5 @@
-// NOTE: unverified in this environment — same caveat as shared/crypto/keyStore.native.ts.
+// Verified on a real Android build: tokens survive app restarts and are
+// rehydrated by bootstrapSession() (wired in app/App.tsx and web/WebApp.tsx).
 import * as Keychain from "react-native-keychain";
 
 const SERVICE = "darkline.auth.tokens";

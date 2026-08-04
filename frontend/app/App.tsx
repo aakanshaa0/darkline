@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { useAppStore } from "@shared/store";
 import {
@@ -35,6 +35,13 @@ import { colors } from "./theme/tokens";
  */
 export default function App(): React.JSX.Element {
   const screen = useAppStore((s) => s.screen);
+  const bootstrapSession = useAppStore((s) => s.bootstrapSession);
+
+  // Same rehydration WebApp.tsx does — without it a stored keychain session
+  // is never restored on native, so every cold start lands back on auth.
+  useEffect(() => {
+    bootstrapSession();
+  }, [bootstrapSession]);
 
   return (
     <View style={styles.root}>

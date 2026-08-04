@@ -1,14 +1,24 @@
 import React from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
-import { useAppStore } from "@shared/store";
+import { useAppStore, useChatStore } from "@shared/store";
 import { Avatar, MessageBubble, Composer, IconCircleButton } from "../../components";
 import { colors, shape, typography } from "../../theme/tokens";
 
+/**
+ * Group E2EE (Sender Keys) isn't wired up yet — see chatStore's
+ * openGroupConversation comment — so this always shows an empty thread and
+ * the composer is a no-op. Not reachable in practice without a
+ * create-group flow, which doesn't exist either yet.
+ */
 export function GroupScreen() {
-  const groupMessages = useAppStore((s) => s.groupMessages);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const conversations = useChatStore((s) => s.conversations);
+  const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const backToHome = useAppStore((s) => s.backToHome);
-  const sendGroupDemo = useAppStore((s) => s.sendGroupDemo);
   const startGroupCall = useAppStore((s) => s.startGroupCall);
+
+  const conversation = conversations.find((c) => c.id === activeConversationId);
+  const messages = (activeConversationId && messagesByConversation[activeConversationId]) || [];
 
   return (
     <View style={styles.container}>
@@ -16,19 +26,19 @@ export function GroupScreen() {
         <Pressable onPress={backToHome}>
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Avatar initials="TR" size={shape.avatarSm} />
+        <Avatar initials={(conversation?.name ?? "GR").slice(0, 2).toUpperCase()} size={shape.avatarSm} />
         <View style={styles.textCol}>
-          <Text style={styles.title}>Trip Plan</Text>
-          <Text style={styles.subtitle}>5 members</Text>
+          <Text style={styles.title}>{conversation?.name ?? "Group"}</Text>
+          <Text style={styles.subtitle}>Group chat</Text>
         </View>
         <IconCircleButton icon="📹" onPress={startGroupCall} />
       </View>
       <ScrollView contentContainerStyle={styles.messages}>
-        {groupMessages.map((m, i) => (
-          <MessageBubble key={i} fromMe={m.fromMe} text={m.text} senderName={m.senderName} />
+        {messages.map((m) => (
+          <MessageBubble key={m.id} fromMe={m.fromMe} text={m.text} senderName={m.senderName} />
         ))}
       </ScrollView>
-      <Composer onSend={sendGroupDemo} />
+      <Composer onSend={() => undefined} />
     </View>
   );
 }

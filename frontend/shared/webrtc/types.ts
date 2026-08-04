@@ -16,9 +16,15 @@ export interface RTCIceServer {
   credential?: string;
 }
 
+export interface MediaStreamTrackLike {
+  kind: string;
+  enabled: boolean;
+  stop(): void;
+}
+
 export interface MediaStreamLike {
   id: string;
-  getTracks(): Array<{ stop(): void }>;
+  getTracks(): MediaStreamTrackLike[];
 }
 
 export interface RTCPeerConnectionLike {

@@ -1,4 +1,8 @@
-// NOTE: unverified in this environment — see sodium.native.ts. Uses the
+// Verified on a real Android build: the identity persists across restarts,
+// so a device keeps one long-lived E2EE identity. Note the consequence —
+// identity is per-device and uploading a bundle overwrites the published
+// one, so signing in on a second device makes the first device's ciphertext
+// undecryptable. Multi-device needs per-device sessions. Uses the
 // OS keychain (Keychain on iOS, Keystore-backed on Android), matching the
 // "private keys generated/stored in Keychain/Keystore, never transmitted"
 // requirement in the architecture doc (Part B.6).

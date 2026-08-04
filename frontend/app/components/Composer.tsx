@@ -1,14 +1,29 @@
-import React from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { View, TextInput, Pressable, Text, StyleSheet } from "react-native";
 import { colors, shape, typography } from "../theme/tokens";
 
-export function Composer({ onSend }: { onSend: () => void }) {
+export function Composer({ onSend }: { onSend: (text: string) => void }) {
+  const [text, setText] = useState("");
+
+  function handleSend() {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    onSend(trimmed);
+    setText("");
+  }
+
   return (
     <View style={styles.row}>
-      <View style={styles.pill}>
-        <Text style={styles.placeholder}>Message…</Text>
-      </View>
-      <Pressable onPress={onSend} style={styles.sendButton}>
+      <TextInput
+        style={styles.input}
+        placeholder="Message…"
+        placeholderTextColor={colors.textSecondary}
+        value={text}
+        onChangeText={setText}
+        onSubmitEditing={handleSend}
+        returnKeyType="send"
+      />
+      <Pressable onPress={handleSend} style={styles.sendButton}>
         <Text style={styles.sendIcon}>➤</Text>
       </Pressable>
     </View>
@@ -23,17 +38,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  pill: {
+  input: {
     flex: 1,
     height: 40,
     borderRadius: shape.pillRadius,
     backgroundColor: colors.surfaceRaised,
-    justifyContent: "center",
     paddingHorizontal: 14,
-  },
-  placeholder: {
     fontSize: typography.sizes.body,
-    color: colors.textSecondary,
+    color: colors.textPrimary,
   },
   sendButton: {
     width: 36,
