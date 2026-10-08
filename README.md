@@ -121,7 +121,16 @@ darkline/
 - Frontend: [`docs/setup/frontend-setup.md`](docs/setup/frontend-setup.md) — native project setup, running iOS/Android/web
 - Design reference: [`docs/design-reference/`](docs/design-reference/) — click-through prototypes (`.dc.html`) and the full architecture doc everything here is built from
 
-## Project status
+## Architecture Highlights
+
+- **Microservices Design**: Four independently scalable backend services communicating through Kafka event streams
+- **Offline-First**: Local database with automatic sync on reconnect, ensuring seamless user experience
+- **Zero-Knowledge Server**: End-to-end encryption means the server never sees message content
+- **Cross-Platform**: Single React Native codebase targeting iOS, Android, and web with platform-specific optimizations
+- **Event-Driven**: Kafka-based message fanout enables horizontal scaling and reliable message delivery
+- **Real-Time Communication**: Socket.io with Redis adapter for distributed WebSocket connections
+
+## Project Status
 
 This is an active build, not a finished product. Roughly:
 
@@ -132,3 +141,11 @@ This is an active build, not a finished product. Roughly:
 **Not built yet**: chat/call *screens* are still on demo data (the API client and store actions exist and are tested — see above — but the UI hasn't been switched over to render live conversations yet), Double Ratchet forward secrecy (current E2EE is real but static-key, no per-message rekeying), multi-hop BLE mesh routing (single-hop only, by design — see the architecture doc's scaling notes), and push notifications.
 
 See `docs/design-reference/darkline-complete-context.md` for the complete architecture rationale behind every decision above.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests.
+
+## License
+
+This project is open source and available under the MIT License.
